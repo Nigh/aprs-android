@@ -1,0 +1,14 @@
+/.gradle/
+/.gradle-docker/
+/.kotlin/
+/.idea/
+*.iml
+/local.properties
+/app/build/
+/build/
+/captures/
+/graphify-out/
+*.apk
+*.ap_
+*.dex
+.DS_Store

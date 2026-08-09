@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APRS-TX</string>
+    <string name="beacon_channel_name">APRS beacon</string>
+    <string name="beacon_channel_desc">Periodic APRS location beacons</string>
+    <string name="beacon_notif_title">APRS beacon active</string>
+    <string name="beacon_notif_text">Sending every %1$ds</string>
+</resources>
