@@ -27,7 +27,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 
 | 文件 | 职责 |
 |------|------|
-| `Aprs.kt` | 包格式、校验、Haversine 均速；TX 委托 `AprsIs` |
+| `Aprs.kt` | 包格式（`!lat/lon[CSE/SPD`comment）、校验、Haversine 均速；TX 委托 `AprsIs` |
 | `AprsIs.kt` | 区域 rotate 选择、login、TCP 发包（短连接） |
 | `LocationHelper.kt` | 单次定位；&lt;30s last-known 优先 |
 | `BeaconService.kt` | 前台 `location` 服务：间隔信标 + 短时 PARTIAL wake |

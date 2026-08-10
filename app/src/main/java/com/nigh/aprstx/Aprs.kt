@@ -49,7 +49,8 @@ object Aprs {
 
     fun formatSpeedKnots(speedMps: Float?): String? {
         if (speedMps == null || speedMps < 0f) return null
-        val knots = kotlin.math.round(speedMps * 1.94384f).toInt()
+        // APRS CSE/SPD speed field is 3 digits (knots), clamp overflow
+        val knots = kotlin.math.round(speedMps * 1.94384f).toInt().coerceIn(0, 999)
         return knots.toString().padStart(3, '0')
     }
 
@@ -65,12 +66,11 @@ object Aprs {
         val lat = formatLatitude(latitude)
         val lon = formatLongitude(longitude)
         val head = "$clean>APRS,TCPIP*:"
+        // Uncompressed position: !lat/lonSYMBOL[CSE/SPD]comment — symbol `[` then optional course/speed
+        // ponytail: course hardcoded 000 (unknown); plumb GPS bearing when we care
         val speed = formatSpeedKnots(speedMps)
-        val position = if (speed != null) {
-            "$head!$lat/$lon/$speed["
-        } else {
-            "$head!$lat/$lon["
-        }
+        val cseSpd = if (speed != null) "000/$speed" else ""
+        val position = "$head!$lat/$lon[$cseSpd"
         val packets = mutableListOf(position + (commentText ?: ""))
         if (!statusText.isNullOrEmpty()) {
             packets.add("$head>$statusText")

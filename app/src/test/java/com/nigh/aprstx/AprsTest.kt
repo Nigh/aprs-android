@@ -28,6 +28,20 @@ class AprsTest {
     }
 
     @Test
+    fun generatesPositionPacketWithCourseSpeedBeforeComment() {
+        // APRS101: symbol then CSE/SPD then comment — not /SPD[comment
+        val packets = Aprs.generatePackets(
+            callsign = "n0call-1",
+            latitude = 49.058333,
+            longitude = -72.029166,
+            commentText = "hello",
+            speedMps = 0.5144f, // ~1 kn
+        )
+        assertEquals(1, packets.size)
+        assertEquals("N0CALL-1>APRS,TCPIP*:!4903.50N/07201.75W[000/001hello", packets[0])
+    }
+
+    @Test
     fun validatesCallsignAndPasscode() {
         assertTrue(Aprs.validateCallsign("N0CALL-1", "12345").valid)
         assertFalse(Aprs.validateCallsign("TOOLONGCALL", "1").valid)
