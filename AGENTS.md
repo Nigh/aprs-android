@@ -35,6 +35,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `AppGraph.kt` | 单例 `SettingsStore` / `LogStore` |
 | `Transmitter.kt` | GPS+发包共享逻辑 |
 | `MainActivity.kt` / `Ui.kt` | 主界面 + Logs |
+| `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
 | `build.sh` | Docker 编译/测试/安装 |
 
 ## 后台与省电（约定）

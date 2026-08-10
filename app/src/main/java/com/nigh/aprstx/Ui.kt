@@ -1,5 +1,6 @@
 package com.nigh.aprstx
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +27,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -214,6 +214,7 @@ fun LogsScreen(
         if (logs.isEmpty()) {
             Text("No logs yet. Operations will appear here.")
         } else {
+            val dark = isSystemInDarkTheme()
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(logs, key = { it.id }) { entry ->
                     Column {
@@ -221,10 +222,10 @@ fun LogsScreen(
                             text = "${fmt.format(Date(entry.timestampMs))}  ${entry.type.name}",
                             style = MaterialTheme.typography.labelSmall,
                             color = when (entry.type) {
-                                LogType.SUCCESS -> ColorSuccess
-                                LogType.ERROR -> ColorError
-                                LogType.WARNING -> ColorWarning
-                                LogType.INFO -> MaterialTheme.colorScheme.primary
+                                LogType.SUCCESS -> if (dark) XianiiSuccess else XianiiSuccessLight
+                                LogType.ERROR -> if (dark) XianiiError else XianiiErrorLight
+                                LogType.WARNING -> if (dark) XianiiWarning else XianiiWarningLight
+                                LogType.INFO -> if (dark) XianiiInfo else XianiiInfoLight
                             },
                         )
                         Text(
@@ -238,7 +239,3 @@ fun LogsScreen(
         }
     }
 }
-
-private val ColorSuccess = Color(0xFF2E7D32)
-private val ColorError = Color(0xFFC62828)
-private val ColorWarning = Color(0xFFEF6C00)
