@@ -12,13 +12,16 @@ object AppGraph {
         private set
 
     fun init(context: Context) {
-        if (ready) return
-        synchronized(this) {
-            if (ready) return
-            val app = context.applicationContext
-            settings = SettingsStore(app)
-            logs = LogStore(app)
-            ready = true
+        if (!ready) {
+            synchronized(this) {
+                if (!ready) {
+                    val app = context.applicationContext
+                    settings = SettingsStore(app)
+                    logs = LogStore(app)
+                    ready = true
+                }
+            }
         }
+        WifiAutoBeacon.ensureListening(context.applicationContext)
     }
 }

@@ -73,8 +73,23 @@ wait_for_device() {
 '
 
 build() {
-    echo "==> Building..."
+    echo "==> Building debug..."
     docker_run_build ./gradlew assembleDebug
+}
+
+release() {
+    if [ ! -f "$SCRIPT_DIR/keystore/release.env" ]; then
+        echo "ERROR: keystore/release.env not found — run keytool first (see AGENTS.md)." >&2
+        exit 1
+    fi
+    echo "==> Building release (signed)..."
+    docker run --rm \
+        -v "$SCRIPT_DIR:/workspace" \
+        -v "$HOME/.android:/root/.android" \
+        --env-file "$SCRIPT_DIR/keystore/release.env" \
+        -e GRADLE_USER_HOME=/workspace/.gradle-docker \
+        -w /workspace \
+        "$IMG" ./gradlew assembleRelease
 }
 
 test_unit() {
@@ -113,6 +128,7 @@ exec adb $(printf '%q ' "$@")
 
 case "${1:-}" in
     build)   build ;;
+    release) release ;;
     test)    test_unit ;;
     install) install ;;
     run)     build; install ;;

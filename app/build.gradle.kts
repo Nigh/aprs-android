@@ -17,10 +17,21 @@ android {
         versionName = "1.0"
     }
 
+    // ponytail: release signing from env (keystore excluded from git). CI/local inject these.
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("APRS_RELEASE_KEYSTORE") ?: "keystore/release.jks")
+            storePassword = System.getenv("APRS_RELEASE_STORE_PWD")
+            keyAlias = System.getenv("APRS_RELEASE_KEY_ALIAS") ?: "aprstx"
+            keyPassword = System.getenv("APRS_RELEASE_KEY_PWD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

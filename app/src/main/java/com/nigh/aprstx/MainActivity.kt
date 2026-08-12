@@ -8,7 +8,10 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,16 +61,36 @@ class MainActivity : ComponentActivity() {
                 BeaconRuntime.clearToast()
             }
 
+            var autoStartWifi by remember { mutableStateOf(settings.autoStartOnWifiDisconnect) }
+            var autoStopWifi by remember { mutableStateOf(settings.autoStopOnWifiConnect) }
+
             XianiiTheme {
-                Surface(Modifier.fillMaxSize()) {
-                    if (screen == "logs") {
-                        LogsScreen(
+                // targetSdk 35 edge-to-edge: keep content clear of status/nav bars
+                Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                    when (screen) {
+                        "logs" -> LogsScreen(
                             logs = logList,
                             onBack = { screen = "main" },
                             onClear = { logs.clear() },
                         )
-                    } else {
-                        MainScreen(
+                        "settings" -> SettingsScreen(
+                            autoStartOnWifiDisconnect = autoStartWifi,
+                            autoStopOnWifiConnect = autoStopWifi,
+                            intervalSec = interval.toIntOrNull()?.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
+                                ?: settings.scheduleIntervalSec,
+                            onAutoStartOnWifiDisconnect = {
+                                autoStartWifi = it
+                                settings.autoStartOnWifiDisconnect = it
+                                WifiAutoBeacon.ensureListening(this@MainActivity)
+                            },
+                            onAutoStopOnWifiConnect = {
+                                autoStopWifi = it
+                                settings.autoStopOnWifiConnect = it
+                                WifiAutoBeacon.ensureListening(this@MainActivity)
+                            },
+                            onBack = { screen = "main" },
+                        )
+                        else -> MainScreen(
                             callsign = callsign,
                             passcode = passcode,
                             comment = comment,
@@ -164,6 +187,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onStopSchedule = { BeaconService.stop(this@MainActivity) },
                             onOpenLogs = { screen = "logs" },
+                            onOpenSettings = { screen = "settings" },
                         )
                     }
                 }

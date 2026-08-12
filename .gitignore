@@ -11,4 +11,6 @@
 *.apk
 *.ap_
 *.dex
+/keystore/
+local.properties
 .DS_Store
