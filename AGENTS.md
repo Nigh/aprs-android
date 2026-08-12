@@ -2,6 +2,8 @@
 
 Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS Tier2** (not the PWA Cloudflare HTTP gateway).
 
+许可：**GPLv3**（根目录 `LICENSE`）。
+
 ## 文档同步（必须）
 
 对项目做出任何编辑时，必须同步更新本文件，使其与代码、构建方式、后台策略保持一致。
