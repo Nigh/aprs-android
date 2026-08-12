@@ -22,6 +22,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,6 +58,7 @@ fun MainScreen(
     onStartSchedule: () -> Unit,
     onStopSchedule: () -> Unit,
     onOpenLogs: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Column(
         Modifier
@@ -71,7 +73,10 @@ fun MainScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("APRS-TX", style = MaterialTheme.typography.headlineSmall)
-            TextButton(onClick = onOpenLogs) { Text("Logs") }
+            Row {
+                TextButton(onClick = onOpenSettings) { Text("Settings") }
+                TextButton(onClick = onOpenLogs) { Text("Logs") }
+            }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -186,6 +191,73 @@ fun MainScreen(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+fun SettingsScreen(
+    autoStartOnWifiDisconnect: Boolean,
+    autoStopOnWifiConnect: Boolean,
+    intervalSec: Int,
+    onAutoStartOnWifiDisconnect: (Boolean) -> Unit,
+    onAutoStopOnWifiConnect: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Settings", style = MaterialTheme.typography.headlineSmall)
+            TextButton(onClick = onBack) { Text("Back") }
+        }
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Waits one interval (${intervalSec}s) after disconnect, then starts",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = autoStartOnWifiDisconnect,
+                onCheckedChange = onAutoStartOnWifiDisconnect,
+            )
+        }
+
+        HorizontalDivider()
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Auto-stop on WiFi connect", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Stops the schedule when WiFi connects",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = autoStopOnWifiConnect,
+                onCheckedChange = onAutoStopOnWifiConnect,
+            )
+        }
     }
 }
 

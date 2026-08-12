@@ -25,6 +25,14 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("scheduleInterval", 60).coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
         set(v) = prefs.edit().putInt("scheduleInterval", v.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)).apply()
 
+    var autoStartOnWifiDisconnect: Boolean
+        get() = prefs.getBoolean("autoStartOnWifiDisconnect", false)
+        set(v) = prefs.edit().putBoolean("autoStartOnWifiDisconnect", v).apply()
+
+    var autoStopOnWifiConnect: Boolean
+        get() = prefs.getBoolean("autoStopOnWifiConnect", false)
+        set(v) = prefs.edit().putBoolean("autoStopOnWifiConnect", v).apply()
+
     var lastLocation: AprsLocation?
         get() {
             if (!prefs.contains("lat")) return null

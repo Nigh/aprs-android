@@ -68,4 +68,28 @@ class AprsTest {
             AprsIs.loginLine("n0call-1", "12345"),
         )
     }
+
+    @Test
+    fun wifiAutoActions() {
+        assertEquals(
+            WifiAutoAction.SCHEDULE_START,
+            wifiAutoAction(wifiGained = false, autoStart = true, autoStop = false, beaconActive = false),
+        )
+        assertEquals(
+            WifiAutoAction.NONE,
+            wifiAutoAction(wifiGained = false, autoStart = true, autoStop = false, beaconActive = true),
+        )
+        assertEquals(
+            WifiAutoAction.STOP,
+            wifiAutoAction(wifiGained = true, autoStart = false, autoStop = true, beaconActive = true),
+        )
+        assertEquals(
+            WifiAutoAction.CANCEL_PENDING,
+            wifiAutoAction(wifiGained = true, autoStart = true, autoStop = true, beaconActive = false),
+        )
+        assertEquals(
+            WifiAutoAction.NONE,
+            wifiAutoAction(wifiGained = false, autoStart = false, autoStop = true, beaconActive = false),
+        )
+    }
 }

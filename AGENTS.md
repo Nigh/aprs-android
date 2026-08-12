@@ -35,9 +35,10 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `LocationHelper.kt` | 单次定位；&lt;30s last-known 优先 |
 | `BeaconService.kt` | 前台 `location` 服务：间隔信标 + 短时 PARTIAL wake |
 | `BeaconRuntime.kt` | 进程内 UI 状态（active/countdown/location/toast） |
-| `AppGraph.kt` | 单例 `SettingsStore` / `LogStore` |
+| `AppGraph.kt` | 单例 `SettingsStore` / `LogStore`；init 时挂 WiFi 监听 |
+| `WifiAutoBeacon.kt` | WiFi 断连延时 auto-start / 连上 auto-stop（进程存活期内） |
 | `Transmitter.kt` | GPS+发包共享逻辑 |
-| `MainActivity.kt` / `Ui.kt` | 主界面 + Logs |
+| `MainActivity.kt` / `Ui.kt` | 主界面 + Settings + Logs |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
 | `res/mipmap-anydpi/ic_launcher*.xml` | 自适应 launcher icon（fg 居中缩至 60% / bg 全幅 → `drawable/ic_launcher_{foreground,background}.png`） |
 | `docs/icon.png` | README 顶部预览（合成 fg/bg） |
@@ -50,7 +51,8 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - 禁止连续 `requestLocationUpdates`；禁止 screen wake lock。
 - TX 前后 `PARTIAL_WAKE_LOCK` ≤60s，间隔内仅 `delay` 倒计时。
 - 通知 channel：`IMPORTANCE_LOW` + silent。
+- WiFi 自动启停：`Settings` 两项（断连后等一个 interval 再 start；连上 stop）；`ConnectivityManager` NetworkCallback，进程被杀则失效。
 
 ## 自检
 
-- `./build.sh test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行）。
+- `./build.sh test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作）。
