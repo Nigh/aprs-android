@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon.png" alt="APRS-TX icon" width="33%">
+</p>
+
 # APRS-TX (Android)
 
 Native Android port of [aprs-pwa](../aprs-pwa): send GPS beacons / status over **APRS-IS Tier2** (TCP port 14580).

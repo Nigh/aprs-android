@@ -14,7 +14,8 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - 镜像：`xianii/android-dev:latest`（`ANDROID_DEV_IMAGE` 可覆盖），见 `android-dev-docker`。
 - 编译：容器 root + `GRADLE_USER_HOME=/workspace/.gradle-docker`（不挂载宿主 `~/.gradle`）。
 - adb：`--user` + USB + `~/.android`；安装前会 `adb kill-server` 释放宿主 adb。
-- 子命令：`build` / `test` / `install` / `run` / `adb <args>`；无参 = build+install。
+- 子命令：`build` / `release` / `test` / `install` / `run` / `adb <args>`；无参 = build+install。
+- Release 签名：`./build.sh release` 读 `keystore/release.env`（`APRS_RELEASE_*`）；`/keystore/` 不入库。
 
 ## 技术栈
 
@@ -38,6 +39,8 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `Transmitter.kt` | GPS+发包共享逻辑 |
 | `MainActivity.kt` / `Ui.kt` | 主界面 + Logs |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
+| `res/mipmap-anydpi/ic_launcher*.xml` | 自适应 launcher icon（fg 居中缩至 60% / bg 全幅 → `drawable/ic_launcher_{foreground,background}.png`） |
+| `docs/icon.png` | README 顶部预览（合成 fg/bg） |
 | `build.sh` | Docker 编译/测试/安装 |
 
 ## 后台与省电（约定）
