@@ -8,7 +8,10 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,7 +65,8 @@ class MainActivity : ComponentActivity() {
             var autoStopWifi by remember { mutableStateOf(settings.autoStopOnWifiConnect) }
 
             XianiiTheme {
-                Surface(Modifier.fillMaxSize()) {
+                // targetSdk 35 edge-to-edge: keep content clear of status/nav bars
+                Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                     when (screen) {
                         "logs" -> LogsScreen(
                             logs = logList,
