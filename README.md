@@ -51,3 +51,7 @@ Override image: `ANDROID_DEV_IMAGE=android-dev ./build.sh build`
 
 - applicationId: `com.nigh.aprstx`
 - minSdk 28 / targetSdk 35 / Compose + Kotlin 2.0
+
+## License
+
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
