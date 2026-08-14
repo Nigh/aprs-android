@@ -15,6 +15,32 @@ import kotlinx.coroutines.launch
 /** Pure WiFi edge → action for auto beacon (unit-tested). */
 enum class WifiAutoAction { NONE, SCHEDULE_START, CANCEL_PENDING, STOP }
 
+enum class WifiStopArm { NEED_DISCONNECT, ARM_PENDING, ARMED }
+
+enum class WifiStopEvent { CONNECTED, DISCONNECTED, ARM_TIMEOUT }
+
+data class WifiStopResult(val arm: WifiStopArm, val stop: Boolean)
+
+fun wifiStopStep(
+    arm: WifiStopArm,
+    event: WifiStopEvent,
+    autoStop: Boolean,
+    beaconActive: Boolean,
+): WifiStopResult = when (event) {
+    WifiStopEvent.CONNECTED -> WifiStopResult(
+        arm = if (arm == WifiStopArm.ARMED) WifiStopArm.ARMED else WifiStopArm.NEED_DISCONNECT,
+        stop = arm == WifiStopArm.ARMED && autoStop && beaconActive,
+    )
+    WifiStopEvent.DISCONNECTED -> WifiStopResult(
+        arm = if (arm == WifiStopArm.ARMED) WifiStopArm.ARMED else WifiStopArm.ARM_PENDING,
+        stop = false,
+    )
+    WifiStopEvent.ARM_TIMEOUT -> WifiStopResult(
+        arm = if (arm == WifiStopArm.ARM_PENDING) WifiStopArm.ARMED else arm,
+        stop = false,
+    )
+}
+
 fun wifiAutoAction(
     wifiGained: Boolean,
     autoStart: Boolean,
@@ -30,13 +56,18 @@ fun wifiAutoAction(
 /**
  * Listens for WiFi up/down while process is alive.
  * Disconnect + autoStart → wait one scheduleInterval then BeaconService.start;
- * connect + autoStop → BeaconService.stop. ponytail: no Application FGS — dies with process.
+ * if listening starts connected, disconnect continuously for 100s before connect + autoStop is armed.
+ * ponytail: no Application FGS — dies with process.
  */
 object WifiAutoBeacon {
+    private const val STOP_ARM_DELAY_MS = 100_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var callback: ConnectivityManager.NetworkCallback? = null
     private var pendingStart: Job? = null
+    private var pendingStopArm: Job? = null
     private var appContext: Context? = null
+    private val wifiNetworks = mutableSetOf<Network>()
+    private var stopArm = WifiStopArm.ARMED
 
     @Synchronized
     fun ensureListening(context: Context) {
@@ -51,9 +82,19 @@ object WifiAutoBeacon {
             return
         }
         if (callback != null) return
+        wifiNetworks.clear()
+        cm.activeNetwork?.let { network ->
+            if (cm.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            ) {
+                wifiNetworks += network
+            }
+        }
+        val initiallyConnected = wifiNetworks.isNotEmpty()
+        stopArm = if (initiallyConnected) WifiStopArm.NEED_DISCONNECT else WifiStopArm.ARMED
         val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = onWifiEdge(gained = true)
-            override fun onLost(network: Network) = onWifiEdge(gained = false)
+            override fun onAvailable(network: Network) = onWifiAvailable(network)
+            override fun onLost(network: Network) = onWifiLost(network)
         }
         val request = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -67,6 +108,10 @@ object WifiAutoBeacon {
             runCatching { cm.unregisterNetworkCallback(it) }
             callback = null
         }
+        wifiNetworks.clear()
+        pendingStopArm?.cancel()
+        pendingStopArm = null
+        stopArm = WifiStopArm.ARMED
     }
 
     private fun cancelPending() {
@@ -74,23 +119,75 @@ object WifiAutoBeacon {
         pendingStart = null
     }
 
-    private fun onWifiEdge(gained: Boolean) {
+    @Synchronized
+    private fun onWifiAvailable(network: Network) {
+        if (!wifiNetworks.add(network)) return
+        pendingStopArm?.cancel()
+        pendingStopArm = null
+        val ctx = appContext ?: return
+        val settings = AppGraph.settings
+        val stopResult = wifiStopStep(
+            arm = stopArm,
+            event = WifiStopEvent.CONNECTED,
+            autoStop = settings.autoStopOnWifiConnect,
+            beaconActive = BeaconRuntime.active.value,
+        )
+        stopArm = stopResult.arm
+        if (stopResult.stop) {
+            cancelPending()
+            AppGraph.logs.add("WiFi connected — auto-stopping schedule", LogType.INFO)
+            BeaconService.stop(ctx)
+        } else {
+            cancelPending()
+        }
+    }
+
+    @Synchronized
+    private fun onWifiLost(network: Network) {
+        if (!wifiNetworks.remove(network) || wifiNetworks.isNotEmpty()) return
+        val stopResult = wifiStopStep(
+            arm = stopArm,
+            event = WifiStopEvent.DISCONNECTED,
+            autoStop = false,
+            beaconActive = false,
+        )
+        stopArm = stopResult.arm
+        if (stopArm == WifiStopArm.ARM_PENDING) {
+            pendingStopArm?.cancel()
+            pendingStopArm = scope.launch {
+                delay(STOP_ARM_DELAY_MS)
+                armStopIfStillDisconnected()
+            }
+        }
+        onWifiDisconnected()
+    }
+
+    @Synchronized
+    private fun armStopIfStillDisconnected() {
+        if (wifiNetworks.isNotEmpty()) return
+        stopArm = wifiStopStep(
+            arm = stopArm,
+            event = WifiStopEvent.ARM_TIMEOUT,
+            autoStop = false,
+            beaconActive = false,
+        ).arm
+        pendingStopArm = null
+        if (stopArm == WifiStopArm.ARMED && AppGraph.settings.autoStopOnWifiConnect) {
+            AppGraph.logs.add("WiFi auto-stop armed after 100s disconnected", LogType.INFO)
+        }
+    }
+
+    private fun onWifiDisconnected() {
         val ctx = appContext ?: return
         val settings = AppGraph.settings
         when (
             wifiAutoAction(
-                wifiGained = gained,
+                wifiGained = false,
                 autoStart = settings.autoStartOnWifiDisconnect,
-                autoStop = settings.autoStopOnWifiConnect,
+                autoStop = false,
                 beaconActive = BeaconRuntime.active.value,
             )
         ) {
-            WifiAutoAction.CANCEL_PENDING -> cancelPending()
-            WifiAutoAction.STOP -> {
-                cancelPending()
-                AppGraph.logs.add("WiFi connected — auto-stopping schedule", LogType.INFO)
-                BeaconService.stop(ctx)
-            }
             WifiAutoAction.SCHEDULE_START -> {
                 cancelPending()
                 val intervalSec = settings.scheduleIntervalSec.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
@@ -103,7 +200,7 @@ object WifiAutoBeacon {
                     tryStart(ctx)
                 }
             }
-            WifiAutoAction.NONE -> Unit
+            WifiAutoAction.CANCEL_PENDING, WifiAutoAction.STOP, WifiAutoAction.NONE -> Unit
         }
     }
 
