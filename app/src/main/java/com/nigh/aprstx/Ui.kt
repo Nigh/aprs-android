@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val GITHUB_URL = "https://github.com/Nigh/aprs-android"
 
 @Composable
 fun MainScreen(
@@ -60,137 +63,144 @@ fun MainScreen(
     onOpenLogs: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("APRS-TX", style = MaterialTheme.typography.headlineSmall)
-            Row {
-                TextButton(onClick = onOpenSettings) { Text("Settings") }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("APRS-TX", style = MaterialTheme.typography.headlineSmall)
                 TextButton(onClick = onOpenLogs) { Text("Logs") }
             }
-        }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = callsign,
-                onValueChange = onCallsign,
-                label = { Text("Callsign *") },
-                modifier = Modifier.weight(1f),
-                enabled = !scheduling,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-            )
-            OutlinedTextField(
-                value = passcode,
-                onValueChange = onPasscode,
-                label = { Text("Passcode *") },
-                modifier = Modifier.weight(1f),
-                enabled = !scheduling,
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            )
-        }
-
-        HorizontalDivider()
-
-        OutlinedTextField(
-            value = comment,
-            onValueChange = onComment,
-            label = { Text("Comment (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        OutlinedTextField(
-            value = status,
-            onValueChange = onStatus,
-            label = { Text("Status (optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-
-        if (location != null) {
-            val speedText = location.speedMps?.let { " • %.1f km/h".format(it * 3.6f) } ?: ""
-            val accText = location.accuracy?.let { "±%.1fm".format(it) } ?: "±N/A"
-            Text(
-                text = "%.4f°, %.4f°\n%s%s".format(
-                    location.latitude,
-                    location.longitude,
-                    accText,
-                    speedText,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = onGps,
-                enabled = !busy && !scheduling,
-                modifier = Modifier.weight(1f),
-            ) { Text(if (busy) "…" else "GPS") }
-            Button(
-                onClick = onSend,
-                enabled = !busy && !scheduling,
-                modifier = Modifier.weight(2f),
-            ) { Text(if (busy) "…" else "Send") }
-        }
-
-        HorizontalDivider()
-
-        OutlinedTextField(
-            value = interval,
-            onValueChange = onInterval,
-            label = { Text("Interval (sec [>=${Aprs.MIN_INTERVAL_SEC}])") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !scheduling,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        )
-
-        if (!scheduling) {
-            Button(
-                onClick = onStartSchedule,
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Start") }
-        } else {
-            val intervalSec = interval.toIntOrNull()?.coerceAtLeast(Aprs.MIN_INTERVAL_SEC) ?: 60
-            val progress = if (intervalSec > 0) {
-                (1f - countdownSec.toFloat() / intervalSec.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            Box(Modifier.fillMaxWidth()) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .align(Alignment.Center),
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = callsign,
+                    onValueChange = onCallsign,
+                    label = { Text("Callsign *") },
+                    modifier = Modifier.weight(1f),
+                    enabled = !scheduling,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                 )
-                FilledTonalButton(
-                    onClick = onStopSchedule,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Stop (${countdownSec}s)") }
+                OutlinedTextField(
+                    value = passcode,
+                    onValueChange = onPasscode,
+                    label = { Text("Passcode *") },
+                    modifier = Modifier.weight(1f),
+                    enabled = !scheduling,
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                )
             }
-            Text(
-                text = "Sending every ${intervalSec}s — GPS acquired only at TX (background OK)",
-                style = MaterialTheme.typography.bodySmall,
+
+            HorizontalDivider()
+
+            OutlinedTextField(
+                value = comment,
+                onValueChange = onComment,
+                label = { Text("Comment (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
             )
+            OutlinedTextField(
+                value = status,
+                onValueChange = onStatus,
+                label = { Text("Status (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            if (location != null) {
+                val speedText = location.speedMps?.let { " • %.1f km/h".format(it * 3.6f) } ?: ""
+                val accText = location.accuracy?.let { "±%.1fm".format(it) } ?: "±N/A"
+                Text(
+                    text = "%.4f°, %.4f°\n%s%s".format(
+                        location.latitude,
+                        location.longitude,
+                        accText,
+                        speedText,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onGps,
+                    enabled = !busy && !scheduling,
+                    modifier = Modifier.weight(1f),
+                ) { Text(if (busy) "…" else "GPS") }
+                Button(
+                    onClick = onSend,
+                    enabled = !busy && !scheduling,
+                    modifier = Modifier.weight(2f),
+                ) { Text(if (busy) "…" else "Send") }
+            }
+
+            HorizontalDivider()
+
+            OutlinedTextField(
+                value = interval,
+                onValueChange = onInterval,
+                label = { Text("Interval (sec [>=${Aprs.MIN_INTERVAL_SEC}])") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !scheduling,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
+            if (!scheduling) {
+                Button(
+                    onClick = onStartSchedule,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Start") }
+            } else {
+                val intervalSec = interval.toIntOrNull()?.coerceAtLeast(Aprs.MIN_INTERVAL_SEC) ?: 60
+                val progress = if (intervalSec > 0) {
+                    (1f - countdownSec.toFloat() / intervalSec.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                Box(Modifier.fillMaxWidth()) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .align(Alignment.Center),
+                    )
+                    FilledTonalButton(
+                        onClick = onStopSchedule,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Stop (${countdownSec}s)") }
+                }
+                Text(
+                    text = "Sending every ${intervalSec}s — GPS acquired only at TX (background OK)",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            // room for floating Settings button
+            Spacer(Modifier.height(56.dp))
         }
 
-        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        ) { Text("Settings") }
     }
 }
 
@@ -203,59 +213,76 @@ fun SettingsScreen(
     onAutoStopOnWifiConnect: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    val uriHandler = LocalUriHandler.current
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Settings", style = MaterialTheme.typography.headlineSmall)
-            TextButton(onClick = onBack) { Text("Back") }
-        }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Settings", style = MaterialTheme.typography.headlineSmall)
+                TextButton(onClick = onBack) { Text("Back") }
+            }
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Waits one interval (${intervalSec}s) after disconnect, then starts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Waits one interval (${intervalSec}s) after disconnect, then starts",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = autoStartOnWifiDisconnect,
+                    onCheckedChange = onAutoStartOnWifiDisconnect,
                 )
             }
-            Switch(
-                checked = autoStartOnWifiDisconnect,
-                onCheckedChange = onAutoStartOnWifiDisconnect,
-            )
-        }
 
-        HorizontalDivider()
+            HorizontalDivider()
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text("Auto-stop on WiFi connect", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Stops the schedule when WiFi connects",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("Auto-stop on WiFi connect", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Stops the schedule when WiFi connects",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = autoStopOnWifiConnect,
+                    onCheckedChange = onAutoStopOnWifiConnect,
                 )
             }
-            Switch(
-                checked = autoStopOnWifiConnect,
-                onCheckedChange = onAutoStopOnWifiConnect,
+        }
+
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TextButton(onClick = { uriHandler.openUri(GITHUB_URL) }) {
+                Text("github.com/Nigh/aprs-android")
+            }
+            Text(
+                text = "made by BA7NTM",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
