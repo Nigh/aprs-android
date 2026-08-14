@@ -92,4 +92,60 @@ class AprsTest {
             wifiAutoAction(wifiGained = false, autoStart = false, autoStop = true, beaconActive = false),
         )
     }
+
+    @Test
+    fun geoAutoStopArmAndEnter() {
+        val zone = StopZone(0.0, 0.0, radiusM = 100, enabled = true)
+        // ~200m north of origin (1° lat ≈ 111km)
+        val outside = 200.0 / 111_000.0
+        val far = 200.0 / 111_000.0 // also > radius+50
+
+        val firstOutside = geoAutoStopStep(outside, 0.0, listOf(zone), GeoArm.UNKNOWN)
+        assertEquals(GeoArm.ARMED, firstOutside.arm)
+        assertFalse(firstOutside.stop)
+
+        val enter = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.ARMED)
+        assertEquals(GeoArm.ARMED, enter.arm)
+        assertTrue(enter.stop)
+
+        // stay outside while armed → no stop
+        val stay = geoAutoStopStep(far, 0.0, listOf(zone), GeoArm.ARMED)
+        assertEquals(GeoArm.ARMED, stay.arm)
+        assertFalse(stay.stop)
+    }
+
+    @Test
+    fun geoAutoStopNeedClearBeforeArm() {
+        val zone = StopZone(0.0, 0.0, radiusM = 100, enabled = true)
+        // just outside radius but inside radius+50 (~120m)
+        val nearClear = 120.0 / 111_000.0
+        val cleared = 160.0 / 111_000.0 // > 150m
+
+        val startInside = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.UNKNOWN)
+        assertEquals(GeoArm.NEED_CLEAR, startInside.arm)
+        assertFalse(startInside.stop)
+
+        val stillNear = geoAutoStopStep(nearClear, 0.0, listOf(zone), GeoArm.NEED_CLEAR)
+        assertEquals(GeoArm.NEED_CLEAR, stillNear.arm)
+        assertFalse(stillNear.stop)
+
+        val armed = geoAutoStopStep(cleared, 0.0, listOf(zone), GeoArm.NEED_CLEAR)
+        assertEquals(GeoArm.ARMED, armed.arm)
+        assertFalse(armed.stop)
+
+        val reenter = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.ARMED)
+        assertTrue(reenter.stop)
+    }
+
+    @Test
+    fun geoAutoStopIgnoresDisabledAndEmpty() {
+        val disabled = StopZone(0.0, 0.0, radiusM = 100, enabled = false)
+        val atCenter = geoAutoStopStep(0.0, 0.0, listOf(disabled), GeoArm.ARMED)
+        assertEquals(GeoArm.ARMED, atCenter.arm)
+        assertFalse(atCenter.stop)
+
+        val empty = geoAutoStopStep(0.0, 0.0, emptyList(), GeoArm.NEED_CLEAR)
+        assertEquals(GeoArm.NEED_CLEAR, empty.arm)
+        assertFalse(empty.stop)
+    }
 }

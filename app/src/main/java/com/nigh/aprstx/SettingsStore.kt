@@ -1,6 +1,8 @@
 package com.nigh.aprstx
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 
 class SettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("aprs-settings", Context.MODE_PRIVATE)
@@ -32,6 +34,40 @@ class SettingsStore(context: Context) {
     var autoStopOnWifiConnect: Boolean
         get() = prefs.getBoolean("autoStopOnWifiConnect", false)
         set(v) = prefs.edit().putBoolean("autoStopOnWifiConnect", v).apply()
+
+    var stopZones: List<StopZone>
+        get() {
+            val raw = prefs.getString("stopZones", null) ?: return emptyList()
+            return runCatching {
+                val arr = JSONArray(raw)
+                buildList {
+                    for (i in 0 until minOf(arr.length(), StopZone.MAX_ZONES)) {
+                        val o = arr.getJSONObject(i)
+                        add(
+                            StopZone(
+                                latitude = o.getDouble("lat"),
+                                longitude = o.getDouble("lon"),
+                                radiusM = StopZone.clampRadius(o.optInt("radiusM", StopZone.DEFAULT_RADIUS_M)),
+                                enabled = o.optBoolean("enabled", true),
+                            ),
+                        )
+                    }
+                }
+            }.getOrDefault(emptyList())
+        }
+        set(v) {
+            val arr = JSONArray()
+            v.take(StopZone.MAX_ZONES).forEach { z ->
+                arr.put(
+                    JSONObject()
+                        .put("lat", z.latitude)
+                        .put("lon", z.longitude)
+                        .put("radiusM", StopZone.clampRadius(z.radiusM))
+                        .put("enabled", z.enabled),
+                )
+            }
+            prefs.edit().putString("stopZones", arr.toString()).apply()
+        }
 
     var lastLocation: AprsLocation?
         get() {
