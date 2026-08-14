@@ -53,6 +53,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - TX 前后 `PARTIAL_WAKE_LOCK` ≤60s，间隔内仅 `delay` 倒计时。
 - 通知 channel：`IMPORTANCE_LOW` + silent。
 - WiFi 自动启停：`Settings` 两项（断连后等一个 interval 再 start；连上 stop）；`ConnectivityManager` NetworkCallback，进程被杀则失效。
+- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径）；仅在 Beacon TX 轮次单次 GPS 后判定；启动时已在启用区内则需离开全部区外+50m 再武装；进入启用区则本轮不发包并 stop。
 
 ## 自检
 

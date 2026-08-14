@@ -82,6 +82,7 @@ class BeaconService : Service() {
 
         loopJob = scope.launch {
             var lastTx = 0L
+            var geoArm = GeoArm.UNKNOWN
             while (isActive) {
                 val intervalSec = AppGraph.settings.scheduleIntervalSec.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
                 BeaconRuntime.setInterval(intervalSec)
@@ -89,13 +90,44 @@ class BeaconService : Service() {
 
                 val since = System.currentTimeMillis() - lastTx
                 if (lastTx == 0L || since >= (intervalMs * 0.95).toLong()) {
+                    var stoppedByGeo = false
                     withBriefWake {
+                        val loc = try {
+                            Transmitter.ensureFreshLocation(this@BeaconService, AppGraph.settings)
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (loc != null) {
+                            val step = geoAutoStopStep(
+                                loc.latitude,
+                                loc.longitude,
+                                AppGraph.settings.stopZones,
+                                geoArm,
+                            )
+                            geoArm = step.arm
+                            if (step.stop) {
+                                AppGraph.logs.add(
+                                    "Entered stop zone — auto-stopping schedule",
+                                    LogType.INFO,
+                                )
+                                BeaconRuntime.emitToast(
+                                    "Entered stop zone — auto-stopping schedule",
+                                    LogType.INFO,
+                                )
+                                stoppedByGeo = true
+                                return@withBriefWake
+                            }
+                        }
                         Transmitter.transmitOnce(
                             this@BeaconService,
                             AppGraph.settings,
                             AppGraph.logs,
                             "scheduled transmission",
                         )
+                    }
+                    if (stoppedByGeo) {
+                        stopBeacon()
+                        return@launch
                     }
                     lastTx = System.currentTimeMillis()
                 }
