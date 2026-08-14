@@ -37,6 +37,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `BeaconRuntime.kt` | 进程内 UI 状态（active/countdown/location/toast） |
 | `AppGraph.kt` | 单例 `SettingsStore` / `LogStore`；init 时挂 WiFi 监听 |
 | `WifiAutoBeacon.kt` | WiFi 断连延时 auto-start / 连上 auto-stop（进程存活期内） |
+| `GeoAutoStop.kt` | 停发地点（最多 16，每区 enabled + 半径 50–1000m）；`geoAutoStopStep` 状态机 |
 | `Transmitter.kt` | GPS+发包共享逻辑 |
 | `MainActivity.kt` / `Ui.kt` | 主界面（Settings 右下角按钮）+ Settings（底栏 GitHub / made by BA7NTM）+ Logs；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
@@ -55,4 +56,4 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 
 ## 自检
 
-- `./build.sh test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作）。
+- `./build.sh test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作、geo auto-stop 状态机）。
