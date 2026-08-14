@@ -26,6 +26,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -34,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -209,11 +215,19 @@ fun SettingsScreen(
     autoStartOnWifiDisconnect: Boolean,
     autoStopOnWifiConnect: Boolean,
     intervalSec: Int,
+    stopZones: List<StopZone>,
     onAutoStartOnWifiDisconnect: (Boolean) -> Unit,
     onAutoStopOnWifiConnect: (Boolean) -> Unit,
+    onStopZonesChange: (List<StopZone>) -> Unit,
+    onFetchGps: suspend () -> AprsLocation,
     onBack: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val scope = rememberCoroutineScope()
+    var previewLat by remember { mutableStateOf("") }
+    var previewLon by remember { mutableStateOf("") }
+    var gpsBusy by remember { mutableStateOf(false) }
+
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Column(
             Modifier
@@ -268,6 +282,126 @@ fun SettingsScreen(
                     checked = autoStopOnWifiConnect,
                     onCheckedChange = onAutoStopOnWifiConnect,
                 )
+            }
+
+            HorizontalDivider()
+
+            Text(
+                "Stop zones (${stopZones.size}/${StopZone.MAX_ZONES})",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "Auto-stop when entering an enabled zone (after leaving all +${StopZone.CLEAR_EXTRA_M}m if started inside)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = previewLat,
+                    onValueChange = { previewLat = it },
+                    label = { Text("Latitude") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+                OutlinedTextField(
+                    value = previewLon,
+                    onValueChange = { previewLon = it },
+                    label = { Text("Longitude") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            gpsBusy = true
+                            try {
+                                val loc = onFetchGps()
+                                previewLat = "%.6f".format(loc.latitude)
+                                previewLon = "%.6f".format(loc.longitude)
+                            } catch (_: Exception) {
+                                // parent logs/toasts
+                            } finally {
+                                gpsBusy = false
+                            }
+                        }
+                    },
+                    enabled = !gpsBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text(if (gpsBusy) "…" else "GPS") }
+                Button(
+                    onClick = {
+                        val lat = previewLat.toDoubleOrNull() ?: return@Button
+                        val lon = previewLon.toDoubleOrNull() ?: return@Button
+                        if (stopZones.size >= StopZone.MAX_ZONES) return@Button
+                        if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return@Button
+                        onStopZonesChange(
+                            stopZones + StopZone(lat, lon, StopZone.DEFAULT_RADIUS_M, enabled = true),
+                        )
+                    },
+                    enabled = stopZones.size < StopZone.MAX_ZONES &&
+                        previewLat.toDoubleOrNull() != null &&
+                        previewLon.toDoubleOrNull() != null,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Add") }
+            }
+
+            stopZones.forEachIndexed { index, zone ->
+                HorizontalDivider()
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "%.4f°, %.4f°".format(zone.latitude, zone.longitude),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = zone.enabled,
+                        onCheckedChange = { on ->
+                            onStopZonesChange(stopZones.toMutableList().also {
+                                it[index] = zone.copy(enabled = on)
+                            })
+                        },
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    var radiusText by remember(zone.latitude, zone.longitude, zone.radiusM) {
+                        mutableStateOf(zone.radiusM.toString())
+                    }
+                    OutlinedTextField(
+                        value = radiusText,
+                        onValueChange = { raw ->
+                            radiusText = raw
+                            raw.toIntOrNull()
+                                ?.takeIf { it in StopZone.MIN_RADIUS_M..StopZone.MAX_RADIUS_M }
+                                ?.let { n ->
+                                    onStopZonesChange(stopZones.toMutableList().also {
+                                        it[index] = zone.copy(radiusM = n)
+                                    })
+                                }
+                        },
+                        label = { Text("Radius m (${StopZone.MIN_RADIUS_M}–${StopZone.MAX_RADIUS_M})") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                    TextButton(
+                        onClick = {
+                            onStopZonesChange(stopZones.toMutableList().also { it.removeAt(index) })
+                        },
+                    ) { Text("Remove") }
+                }
             }
         }
 

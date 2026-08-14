@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
             var autoStartWifi by remember { mutableStateOf(settings.autoStartOnWifiDisconnect) }
             var autoStopWifi by remember { mutableStateOf(settings.autoStopOnWifiConnect) }
+            var stopZones by remember { mutableStateOf(settings.stopZones) }
 
             XianiiTheme {
                 // targetSdk 35 edge-to-edge: keep content clear of status/nav bars
@@ -78,6 +79,7 @@ class MainActivity : ComponentActivity() {
                             autoStopOnWifiConnect = autoStopWifi,
                             intervalSec = interval.toIntOrNull()?.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
                                 ?: settings.scheduleIntervalSec,
+                            stopZones = stopZones,
                             onAutoStartOnWifiDisconnect = {
                                 autoStartWifi = it
                                 settings.autoStartOnWifiDisconnect = it
@@ -87,6 +89,27 @@ class MainActivity : ComponentActivity() {
                                 autoStopWifi = it
                                 settings.autoStopOnWifiConnect = it
                                 WifiAutoBeacon.ensureListening(this@MainActivity)
+                            },
+                            onStopZonesChange = {
+                                stopZones = it
+                                settings.stopZones = it
+                            },
+                            onFetchGps = {
+                                ensureRuntimePermissions()
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        val prev = settings.lastLocation
+                                        LocationHelper.getLocation(this@MainActivity, prev).also { loc ->
+                                            settings.lastLocation = loc
+                                            BeaconRuntime.setLocation(loc)
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    val msg = "Failed to get GPS location: ${e.message}"
+                                    logs.add(msg, LogType.ERROR)
+                                    BeaconRuntime.emitToast(msg, LogType.ERROR)
+                                    throw e
+                                }
                             },
                             onBack = { screen = "main" },
                         )
