@@ -23,6 +23,7 @@ Each TX is a short-lived session: connect → `user … pass … vers APRS-TX 1.
 
 - Manual GPS fix + APRS-IS TX
 - Scheduled beacons (interval ≥ 30s) via a **location foreground service**
+- WiFi disconnect auto-start and reconnect auto-stop (auto-stop arms after 100s continuously disconnected when listening starts connected)
 - Callsign / passcode validation, comment + status fields
 - Settings + operation logs persisted locally
 
@@ -37,12 +38,17 @@ Each TX is a short-lived session: connect → `user … pass … vers APRS-TX 1.
 | PARTIAL wake lock only around TX (≤60s) | CPU can sleep between beacons |
 | Low-importance silent notification | Minimal user disturbance |
 
-Build/install uses [android-dev-docker](../android-dev-docker) (`xianii/android-dev`).
+Build/install uses the `xianii/android-dev:latest` container image from [android-dev-docker](../android-dev-docker).
 
 ## Build
 
+### Linux / WSL
+
+Requires Docker and the `xianii/android-dev:latest` image.
+
 ```bash
 ./build.sh build          # assembleDebug in Docker
+./build.sh release        # signed release; requires keystore/release.env
 ./build.sh test           # unit tests (packet format / validation)
 ./build.sh install        # adb install + launch (USB device)
 ./build.sh                # build + install
@@ -50,6 +56,21 @@ Build/install uses [android-dev-docker](../android-dev-docker) (`xianii/android-
 ```
 
 Override image: `ANDROID_DEV_IMAGE=android-dev ./build.sh build`
+
+### Windows
+
+Requires [WSLC](https://github.com/microsoft/WSL) available as `wslc.exe` on `PATH`, plus the `xianii/android-dev:latest` image already present in WSLC. Run the PowerShell script from the repository root; it does not require a host Gradle installation.
+
+```powershell
+.\build.ps1 build          # assembleDebug in WSLC
+.\build.ps1 release        # signed release; requires keystore\release.env
+.\build.ps1 test           # unit tests
+.\build.ps1 install        # adb install + launch
+.\build.ps1                # build + install
+.\build.ps1 adb devices
+```
+
+Override image: `$env:ANDROID_DEV_IMAGE = "android-dev"; .\build.ps1 build`
 
 ## Package
 

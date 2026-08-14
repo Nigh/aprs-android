@@ -252,7 +252,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
                     Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Waits one interval (${intervalSec}s) after disconnect, then starts",
+                "Starts after one interval (${intervalSec}s) disconnected; WiFi stop arms after 100s disconnected",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

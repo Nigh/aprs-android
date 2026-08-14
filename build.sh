@@ -8,6 +8,7 @@ ACT="$PKG/.MainActivity"
 IMG="${ANDROID_DEV_IMAGE:-xianii/android-dev:latest}"
 # ponytail: project-local cache — avoids journal lock fights with host Gradle on ~/.gradle
 GRADLE_DIR="$SCRIPT_DIR/.gradle-docker"
+GRADLE_LAUNCHER=(java -Xmx64m -Xms64m -classpath gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain)
 
 mkdir -p "$HOME/.android" "$GRADLE_DIR"
 
@@ -74,7 +75,7 @@ wait_for_device() {
 
 build() {
     echo "==> Building debug..."
-    docker_run_build ./gradlew assembleDebug
+    docker_run_build "${GRADLE_LAUNCHER[@]}" assembleDebug
 }
 
 release() {
@@ -89,12 +90,12 @@ release() {
         --env-file "$SCRIPT_DIR/keystore/release.env" \
         -e GRADLE_USER_HOME=/workspace/.gradle-docker \
         -w /workspace \
-        "$IMG" ./gradlew assembleRelease
+        "$IMG" "${GRADLE_LAUNCHER[@]}" assembleRelease
 }
 
 test_unit() {
     echo "==> Unit tests..."
-    docker_run_build ./gradlew test
+    docker_run_build "${GRADLE_LAUNCHER[@]}" test
 }
 
 install() {

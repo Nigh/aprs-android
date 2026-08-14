@@ -94,6 +94,57 @@ class AprsTest {
     }
 
     @Test
+    fun wifiStopNeedsContinuousDisconnectBeforeArm() {
+        val firstConnect = wifiStopStep(
+            WifiStopArm.NEED_DISCONNECT,
+            WifiStopEvent.CONNECTED,
+            autoStop = true,
+            beaconActive = true,
+        )
+        assertEquals(WifiStopArm.NEED_DISCONNECT, firstConnect.arm)
+        assertFalse(firstConnect.stop)
+
+        val disconnected = wifiStopStep(
+            firstConnect.arm,
+            WifiStopEvent.DISCONNECTED,
+            autoStop = true,
+            beaconActive = true,
+        )
+        assertEquals(WifiStopArm.ARM_PENDING, disconnected.arm)
+
+        val reconnectedEarly = wifiStopStep(
+            disconnected.arm,
+            WifiStopEvent.CONNECTED,
+            autoStop = true,
+            beaconActive = true,
+        )
+        assertEquals(WifiStopArm.NEED_DISCONNECT, reconnectedEarly.arm)
+        assertFalse(reconnectedEarly.stop)
+
+        val restarted = wifiStopStep(
+            reconnectedEarly.arm,
+            WifiStopEvent.DISCONNECTED,
+            autoStop = true,
+            beaconActive = true,
+        )
+        val armed = wifiStopStep(
+            restarted.arm,
+            WifiStopEvent.ARM_TIMEOUT,
+            autoStop = true,
+            beaconActive = true,
+        )
+        assertEquals(WifiStopArm.ARMED, armed.arm)
+
+        val connectedAfterArm = wifiStopStep(
+            armed.arm,
+            WifiStopEvent.CONNECTED,
+            autoStop = true,
+            beaconActive = true,
+        )
+        assertTrue(connectedAfterArm.stop)
+    }
+
+    @Test
     fun geoAutoStopArmAndEnter() {
         val zone = StopZone(0.0, 0.0, radiusM = 100, enabled = true)
         // ~200m north of origin (1° lat ≈ 111km)
