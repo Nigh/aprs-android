@@ -38,8 +38,9 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `AppGraph.kt` | 单例 `SettingsStore` / `LogStore`；init 时挂 WiFi 监听 |
 | `WifiAutoBeacon.kt` | WiFi 断连延时 auto-start；若监听开始时已连接，需连续断连 100s 才武装连上 auto-stop（进程存活期内） |
 | `GeoAutoStop.kt` | 停发地点（最多 16，每区 enabled + 半径 50–1000m）；`geoAutoStopStep` 状态机 |
-| `Transmitter.kt` | GPS+发包共享逻辑 |
-| `MainActivity.kt` / `Ui.kt` | 主界面（Settings 右下角按钮）+ Settings（WiFi、Stop zones、底栏 GitHub / made by BA7NTM）+ Logs；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
+| `SmartBeacon.kt` | 最小/最大间隔与位移 TX 判定（`shouldBeaconTx`）；任意两次发包 ≥30s |
+| `Transmitter.kt` | GPS+发包共享逻辑；成功 TX 记 lastTx；全局 30s cooldown |
+| `MainActivity.kt` / `Ui.kt` | 主界面（Send once / Start scheduled TX；Settings 右下角）+ Settings（min/max interval、位移 TX、WiFi、Stop zones、底栏 GitHub / made by BA7NTM）+ Logs；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
 | `res/mipmap-anydpi/ic_launcher*.xml` | 自适应 launcher icon（fg 居中缩至 60% / bg 全幅 → `drawable/ic_launcher_{foreground,background}.png`） |
 | `docs/icon.png` | README 顶部预览（合成 fg/bg） |
@@ -49,13 +50,15 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 ## 后台与省电（约定）
 
 - 定时发送**必须**走 `BeaconService`（FGS），不要用普通后台线程/WorkManager（&lt;15min 间隔）。
-- 每轮只做一次单次定位；位置未过期（60s）则复用。
+- 任意两次成功发包间隔 ≥30s（手动 Send once 与 scheduled 共用 `lastTxAtMs`）。
+- Settings：min interval 30–3600s（默认 60）；max ≤3600 且 ≥ min（默认 300）；位移阈值默认 100m（100–1000）。位移 TX 默认关：只编 min，max 跟随 min；开启后 GPS 按 min 取点，位移 ≥阈值则按 min 发包，否则到 max 强制发包。
+- 每轮只做一次单次定位；手动 TX 位置未过期（60s）则复用；scheduled GPS 轮次强制刷新。
 - 禁止连续 `requestLocationUpdates`；禁止 screen wake lock。
 - TX 前后 `PARTIAL_WAKE_LOCK` ≤60s，间隔内仅 `delay` 倒计时。
 - 通知 channel：`IMPORTANCE_LOW` + silent。
-- WiFi 自动启停：`Settings` 两项（断连后等一个 interval 再 start）；监听开始时已有 WiFi 则 auto-stop 初始未武装，需完全断连并连续保持 100s 才武装，100s 内重连会取消且下次断连从 0 计时，武装后连上才 stop；`ConnectivityManager` NetworkCallback，进程被杀则失效。
-- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径）；仅在 Beacon TX 轮次单次 GPS 后判定；启动时已在启用区内则需离开全部区外+50m 再武装；进入启用区则本轮不发包并 stop。
+- WiFi 自动启停：`Settings` 两项（断连后等一个 min interval 再 start）；监听开始时已有 WiFi 则 auto-stop 初始未武装，需完全断连并连续保持 100s 才武装，100s 内重连会取消且下次断连从 0 计时，武装后连上才 stop；`ConnectivityManager` NetworkCallback，进程被杀则失效。
+- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径）；Beacon 每次 GPS 轮次判定；启动时已在启用区内则需离开全部区外+50m 再武装；进入启用区则本轮不发包并 stop。
 
 ## 自检
 
-- `./build.sh test` / `.\build.ps1 test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop 状态机）。
+- `./build.sh test` / `.\build.ps1 test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop、min/max/位移 TX 判定）。

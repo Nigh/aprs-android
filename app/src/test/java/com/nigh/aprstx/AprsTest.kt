@@ -199,4 +199,38 @@ class AprsTest {
         assertEquals(GeoArm.NEED_CLEAR, empty.arm)
         assertFalse(empty.stop)
     }
+
+    @Test
+    fun txCooldownAndBeaconDecision() {
+        val t0 = 1_000_000L
+        assertEquals(0, txCooldownRemainingSec(t0, 0L))
+        assertEquals(20, txCooldownRemainingSec(t0, t0 - 10_000L))
+        assertEquals(0, txCooldownRemainingSec(t0, t0 - 30_000L))
+        assertEquals(50, remainingUntilIntervalSec(t0, t0 - 10_000L, 60))
+
+        val first = shouldBeaconTx(t0, 0L, null, null, 0.0, 0.0, 30, 30, false, 200)
+        assertTrue(first.send)
+        assertEquals(BeaconTxReason.FIRST, first.reason)
+
+        val cool = shouldBeaconTx(t0, t0 - 10_000L, 0.0, 0.0, 0.0, 0.0, 30, 30, false, 200)
+        assertFalse(cool.send)
+        assertEquals(BeaconTxReason.COOLDOWN, cool.reason)
+
+        val fixed = shouldBeaconTx(t0, t0 - 30_000L, 0.0, 0.0, 0.0, 0.0, 30, 30, false, 200)
+        assertTrue(fixed.send)
+        assertEquals(BeaconTxReason.FIXED_INTERVAL, fixed.reason)
+
+        val movedLat = 200.0 / 111_000.0
+        val moved = shouldBeaconTx(t0, t0 - 30_000L, 0.0, 0.0, movedLat, 0.0, 30, 600, true, 100)
+        assertTrue(moved.send)
+        assertEquals(BeaconTxReason.MOVED, moved.reason)
+
+        val skip = shouldBeaconTx(t0, t0 - 30_000L, 0.0, 0.0, 0.0, 0.0, 30, 600, true, 100)
+        assertFalse(skip.send)
+        assertEquals(BeaconTxReason.SKIP, skip.reason)
+
+        val forced = shouldBeaconTx(t0, t0 - 600_000L, 0.0, 0.0, 0.0, 0.0, 30, 600, true, 100)
+        assertTrue(forced.send)
+        assertEquals(BeaconTxReason.MAX_INTERVAL, forced.reason)
+    }
 }

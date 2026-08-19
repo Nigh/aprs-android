@@ -52,16 +52,19 @@ fun MainScreen(
     passcode: String,
     comment: String,
     status: String,
-    interval: String,
     location: AprsLocation?,
     busy: Boolean,
     scheduling: Boolean,
     countdownSec: Int,
+    pollIntervalSec: Int,
+    minIntervalSec: Int,
+    maxIntervalSec: Int,
+    smartMove: Boolean,
+    moveThresholdM: Int,
     onCallsign: (String) -> Unit,
     onPasscode: (String) -> Unit,
     onComment: (String) -> Unit,
     onStatus: (String) -> Unit,
-    onInterval: (String) -> Unit,
     onGps: () -> Unit,
     onSend: () -> Unit,
     onStartSchedule: () -> Unit,
@@ -150,31 +153,18 @@ fun MainScreen(
                     onClick = onSend,
                     enabled = !busy && !scheduling,
                     modifier = Modifier.weight(2f),
-                ) { Text(if (busy) "…" else "Send") }
+                ) { Text(if (busy) "…" else "Send once") }
             }
-
-            HorizontalDivider()
-
-            OutlinedTextField(
-                value = interval,
-                onValueChange = onInterval,
-                label = { Text("Interval (sec [>=${Aprs.MIN_INTERVAL_SEC}])") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !scheduling,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
 
             if (!scheduling) {
                 Button(
                     onClick = onStartSchedule,
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Start") }
+                ) { Text("Start scheduled TX") }
             } else {
-                val intervalSec = interval.toIntOrNull()?.coerceAtLeast(Aprs.MIN_INTERVAL_SEC) ?: 60
-                val progress = if (intervalSec > 0) {
-                    (1f - countdownSec.toFloat() / intervalSec.toFloat()).coerceIn(0f, 1f)
+                val progress = if (pollIntervalSec > 0) {
+                    (1f - countdownSec.toFloat() / pollIntervalSec.toFloat()).coerceIn(0f, 1f)
                 } else {
                     0f
                 }
@@ -189,10 +179,14 @@ fun MainScreen(
                     FilledTonalButton(
                         onClick = onStopSchedule,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Stop (${countdownSec}s)") }
+                    ) { Text("Stop scheduled TX (${countdownSec}s)") }
                 }
                 Text(
-                    text = "Sending every ${intervalSec}s — GPS acquired only at TX (background OK)",
+                    text = if (smartMove) {
+                        "GPS every ${minIntervalSec}s — TX if moved ≥${moveThresholdM}m, else every ${maxIntervalSec}s"
+                    } else {
+                        "TX every ${minIntervalSec}s — GPS at each TX (background OK)"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -214,10 +208,17 @@ fun MainScreen(
 fun SettingsScreen(
     autoStartOnWifiDisconnect: Boolean,
     autoStopOnWifiConnect: Boolean,
-    intervalSec: Int,
+    minIntervalSec: Int,
+    maxIntervalSec: Int,
+    smartMove: Boolean,
+    moveThresholdM: Int,
     stopZones: List<StopZone>,
     onAutoStartOnWifiDisconnect: (Boolean) -> Unit,
     onAutoStopOnWifiConnect: (Boolean) -> Unit,
+    onMinInterval: (Int) -> Unit,
+    onMaxInterval: (Int) -> Unit,
+    onSmartMove: (Boolean) -> Unit,
+    onMoveThreshold: (Int) -> Unit,
     onStopZonesChange: (List<StopZone>) -> Unit,
     onFetchGps: suspend () -> AprsLocation,
     onBack: () -> Unit,
@@ -244,6 +245,71 @@ fun SettingsScreen(
                 TextButton(onClick = onBack) { Text("Back") }
             }
 
+            var minText by remember(minIntervalSec) { mutableStateOf(minIntervalSec.toString()) }
+            var maxText by remember(maxIntervalSec) { mutableStateOf(maxIntervalSec.toString()) }
+            var moveText by remember(moveThresholdM) { mutableStateOf(moveThresholdM.toString()) }
+
+            OutlinedTextField(
+                value = minText,
+                onValueChange = { raw ->
+                    minText = raw
+                    raw.toIntOrNull()
+                        ?.takeIf { it in Aprs.MIN_INTERVAL_SEC..Aprs.MAX_INTERVAL_SEC }
+                        ?.let(onMinInterval)
+                },
+                label = { Text("Min interval (sec [${Aprs.MIN_INTERVAL_SEC}–${Aprs.MAX_INTERVAL_SEC}])") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            OutlinedTextField(
+                value = if (smartMove) maxText else minText,
+                onValueChange = { raw ->
+                    maxText = raw
+                    raw.toIntOrNull()
+                        ?.takeIf { it in minIntervalSec..Aprs.MAX_INTERVAL_SEC }
+                        ?.let(onMaxInterval)
+                },
+                label = { Text("Max interval (sec [${minIntervalSec}–${Aprs.MAX_INTERVAL_SEC}])") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = smartMove,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("TX on location change", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "GPS every min interval; TX if moved enough, else at max interval",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = smartMove, onCheckedChange = onSmartMove)
+            }
+            if (smartMove) {
+                OutlinedTextField(
+                    value = moveText,
+                    onValueChange = { raw ->
+                        moveText = raw
+                        raw.toIntOrNull()
+                            ?.takeIf { it in Aprs.MIN_MOVE_M..Aprs.MAX_MOVE_M }
+                            ?.let(onMoveThreshold)
+                    },
+                    label = { Text("Move threshold m (${Aprs.MIN_MOVE_M}–${Aprs.MAX_MOVE_M})") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+
+            HorizontalDivider()
+
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -252,7 +318,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
                     Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                "Starts after one interval (${intervalSec}s) disconnected; WiFi stop arms after 100s disconnected",
+                "Starts after one min interval (${minIntervalSec}s) disconnected; WiFi stop arms after 100s disconnected",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

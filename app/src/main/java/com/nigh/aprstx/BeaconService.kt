@@ -54,12 +54,12 @@ class BeaconService : Service() {
 
         val settings = AppGraph.settings
         val logs = AppGraph.logs
-        val interval = settings.scheduleIntervalSec.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
+        val interval = settings.minIntervalSec
         BeaconRuntime.setInterval(interval)
         BeaconRuntime.setActive(true)
         BeaconRuntime.setCountdown(interval)
 
-        val notif = buildNotification(interval, interval)
+        val notif = buildNotification(interval, interval, settings)
         ServiceCompat.startForeground(
             this,
             NOTIF_ID,
@@ -71,53 +71,104 @@ class BeaconService : Service() {
             },
         )
 
+        val mode = if (settings.smartMoveEnabled) {
+            "GPS every ${interval}s, TX on ≥${settings.moveThresholdM}m or every ${settings.maxIntervalSec}s"
+        } else {
+            "TX every ${interval}s"
+        }
         logs.add(
-            "Scheduled transmissions started for ${settings.callsign}. Sending every ${interval}s.",
+            "Scheduled transmissions started for ${settings.callsign}. $mode.",
             LogType.SUCCESS,
         )
         BeaconRuntime.emitToast(
-            "Scheduled transmissions started for ${settings.callsign}. Sending every ${interval}s.",
+            "Scheduled transmissions started for ${settings.callsign}. $mode.",
             LogType.SUCCESS,
         )
 
         loopJob = scope.launch {
-            var lastTx = 0L
             var geoArm = GeoArm.UNKNOWN
+            var first = true
             while (isActive) {
-                val intervalSec = AppGraph.settings.scheduleIntervalSec.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
-                BeaconRuntime.setInterval(intervalSec)
-                val intervalMs = intervalSec * 1000L
+                val minSec = AppGraph.settings.minIntervalSec
+                val waitSec = if (first) {
+                    first = false
+                    remainingUntilIntervalSec(
+                        System.currentTimeMillis(),
+                        AppGraph.settings.lastTxAtMs,
+                        minSec,
+                    )
+                } else {
+                    minSec
+                }
+                BeaconRuntime.setInterval(if (waitSec > 0) waitSec else minSec)
+                var remaining = waitSec
+                BeaconRuntime.setCountdown(remaining)
+                updateNotification(minSec, remaining)
+                while (isActive && remaining > 0) {
+                    delay(1000)
+                    remaining--
+                    BeaconRuntime.setCountdown(remaining)
+                    if (remaining % 5 == 0 || remaining <= 5) {
+                        updateNotification(minSec, remaining)
+                    }
+                }
+                if (!isActive) break
 
-                val since = System.currentTimeMillis() - lastTx
-                if (lastTx == 0L || since >= (intervalMs * 0.95).toLong()) {
-                    var stoppedByGeo = false
-                    withBriefWake {
-                        val loc = try {
-                            Transmitter.ensureFreshLocation(this@BeaconService, AppGraph.settings)
-                        } catch (_: Exception) {
-                            null
-                        }
-                        if (loc != null) {
-                            val step = geoAutoStopStep(
-                                loc.latitude,
-                                loc.longitude,
-                                AppGraph.settings.stopZones,
-                                geoArm,
+                var stoppedByGeo = false
+                withBriefWake {
+                    val settings = AppGraph.settings
+                    val loc = try {
+                        Transmitter.ensureFreshLocation(
+                            this@BeaconService,
+                            settings,
+                            maxAgeMs = 0L,
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (loc != null) {
+                        val step = geoAutoStopStep(
+                            loc.latitude,
+                            loc.longitude,
+                            settings.stopZones,
+                            geoArm,
+                        )
+                        geoArm = step.arm
+                        if (step.stop) {
+                            AppGraph.logs.add(
+                                "Entered stop zone — auto-stopping schedule",
+                                LogType.INFO,
                             )
-                            geoArm = step.arm
-                            if (step.stop) {
-                                AppGraph.logs.add(
-                                    "Entered stop zone — auto-stopping schedule",
-                                    LogType.INFO,
-                                )
-                                BeaconRuntime.emitToast(
-                                    "Entered stop zone — auto-stopping schedule",
-                                    LogType.INFO,
-                                )
-                                stoppedByGeo = true
-                                return@withBriefWake
-                            }
+                            BeaconRuntime.emitToast(
+                                "Entered stop zone — auto-stopping schedule",
+                                LogType.INFO,
+                            )
+                            stoppedByGeo = true
+                            return@withBriefWake
                         }
+                        val decision = shouldBeaconTx(
+                            nowMs = System.currentTimeMillis(),
+                            lastTxAtMs = settings.lastTxAtMs,
+                            lastTxLat = settings.lastTxLat,
+                            lastTxLon = settings.lastTxLon,
+                            lat = loc.latitude,
+                            lon = loc.longitude,
+                            minSec = settings.minIntervalSec,
+                            maxSec = settings.maxIntervalSec,
+                            smartMove = settings.smartMoveEnabled,
+                            moveThresholdM = settings.moveThresholdM,
+                        )
+                        if (!decision.send) {
+                            return@withBriefWake
+                        }
+                        Transmitter.transmitOnce(
+                            this@BeaconService,
+                            settings,
+                            AppGraph.logs,
+                            "scheduled transmission",
+                            location = loc,
+                        )
+                    } else {
                         Transmitter.transmitOnce(
                             this@BeaconService,
                             AppGraph.settings,
@@ -125,22 +176,10 @@ class BeaconService : Service() {
                             "scheduled transmission",
                         )
                     }
-                    if (stoppedByGeo) {
-                        stopBeacon()
-                        return@launch
-                    }
-                    lastTx = System.currentTimeMillis()
                 }
-
-                // Tick countdown once per second without holding a wake lock.
-                var remaining = intervalSec
-                while (isActive && remaining > 0) {
-                    delay(1000)
-                    remaining--
-                    BeaconRuntime.setCountdown(remaining)
-                    if (remaining % 5 == 0 || remaining <= 5) {
-                        updateNotification(intervalSec, remaining)
-                    }
+                if (stoppedByGeo) {
+                    stopBeacon()
+                    return@launch
                 }
             }
         }
@@ -196,7 +235,7 @@ class BeaconService : Service() {
         mgr.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(intervalSec: Int, remainingSec: Int): Notification {
+    private fun buildNotification(intervalSec: Int, remainingSec: Int, settings: SettingsStore = AppGraph.settings): Notification {
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -211,7 +250,13 @@ class BeaconService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.beacon_notif_title))
-            .setContentText("Next TX in ${remainingSec}s (every ${intervalSec}s)")
+            .setContentText(
+                if (settings.smartMoveEnabled) {
+                    "Next GPS in ${remainingSec}s (TX ${intervalSec}–${settings.maxIntervalSec}s)"
+                } else {
+                    "Next TX in ${remainingSec}s (every ${intervalSec}s)"
+                },
+            )
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(open)
             .addAction(0, "Stop", stop)

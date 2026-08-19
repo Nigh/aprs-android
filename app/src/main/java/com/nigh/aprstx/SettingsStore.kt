@@ -23,9 +23,60 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("statusText", "") ?: ""
         set(v) = prefs.edit().putString("statusText", v).apply()
 
-    var scheduleIntervalSec: Int
-        get() = prefs.getInt("scheduleInterval", 60).coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
-        set(v) = prefs.edit().putInt("scheduleInterval", v.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)).apply()
+    var minIntervalSec: Int
+        get() = Aprs.clampIntervalSec(
+            prefs.getInt("minIntervalSec", prefs.getInt("scheduleInterval", 60)),
+        )
+        set(v) {
+            val min = Aprs.clampIntervalSec(v)
+            val e = prefs.edit().putInt("minIntervalSec", min)
+            if (!smartMoveEnabled || prefs.getInt("maxIntervalSec", Aprs.DEFAULT_MAX_INTERVAL_SEC) < min) {
+                e.putInt("maxIntervalSec", min)
+            }
+            e.apply()
+        }
+
+    var maxIntervalSec: Int
+        get() {
+            val min = minIntervalSec
+            if (!smartMoveEnabled) return min
+            return prefs.getInt("maxIntervalSec", Aprs.DEFAULT_MAX_INTERVAL_SEC)
+                .coerceIn(min, Aprs.MAX_INTERVAL_SEC)
+        }
+        set(v) {
+            val min = minIntervalSec
+            prefs.edit().putInt("maxIntervalSec", v.coerceIn(min, Aprs.MAX_INTERVAL_SEC)).apply()
+        }
+
+    var smartMoveEnabled: Boolean
+        get() = prefs.getBoolean("smartMoveEnabled", false)
+        set(v) {
+            val e = prefs.edit().putBoolean("smartMoveEnabled", v)
+            if (!v) e.putInt("maxIntervalSec", minIntervalSec)
+            e.apply()
+        }
+
+    var moveThresholdM: Int
+        get() = Aprs.clampMoveM(prefs.getInt("moveThresholdM", Aprs.DEFAULT_MOVE_M))
+        set(v) = prefs.edit().putInt("moveThresholdM", Aprs.clampMoveM(v)).apply()
+
+    var lastTxAtMs: Long
+        get() = prefs.getLong("lastTxAtMs", 0L)
+        set(v) = prefs.edit().putLong("lastTxAtMs", v).apply()
+
+    var lastTxLat: Double?
+        get() = if (prefs.contains("lastTxLat")) Double.fromBits(prefs.getLong("lastTxLat", 0L)) else null
+        set(v) {
+            if (v == null) prefs.edit().remove("lastTxLat").apply()
+            else prefs.edit().putLong("lastTxLat", v.toRawBits()).apply()
+        }
+
+    var lastTxLon: Double?
+        get() = if (prefs.contains("lastTxLon")) Double.fromBits(prefs.getLong("lastTxLon", 0L)) else null
+        set(v) {
+            if (v == null) prefs.edit().remove("lastTxLon").apply()
+            else prefs.edit().putLong("lastTxLon", v.toRawBits()).apply()
+        }
 
     var autoStartOnWifiDisconnect: Boolean
         get() = prefs.getBoolean("autoStartOnWifiDisconnect", false)

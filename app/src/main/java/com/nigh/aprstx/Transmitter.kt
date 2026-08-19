@@ -4,9 +4,13 @@ import android.content.Context
 
 /** Shared GPS + APRS TX used by UI and BeaconService. */
 object Transmitter {
-    suspend fun ensureFreshLocation(context: Context, settings: SettingsStore): AprsLocation {
+    suspend fun ensureFreshLocation(
+        context: Context,
+        settings: SettingsStore,
+        maxAgeMs: Long = Aprs.STALE_LOCATION_MS,
+    ): AprsLocation {
         val previous = settings.lastLocation ?: BeaconRuntime.lastLocation.value
-        if (previous != null && !Aprs.isLocationStale(previous)) {
+        if (previous != null && !Aprs.isLocationStale(previous, maxAgeMs)) {
             BeaconRuntime.setLocation(previous)
             return previous
         }
@@ -21,12 +25,21 @@ object Transmitter {
         settings: SettingsStore,
         logs: LogStore,
         reason: String,
+        location: AprsLocation? = null,
     ): TransmitResult {
         BeaconRuntime.setBusy(true)
         try {
+            val wait = txCooldownRemainingSec(System.currentTimeMillis(), settings.lastTxAtMs)
+            if (wait > 0) {
+                val msg = "Minimum interval ${Aprs.MIN_INTERVAL_SEC}s — wait ${wait}s"
+                logs.add(msg, LogType.WARNING)
+                BeaconRuntime.emitToast(msg, LogType.WARNING)
+                return TransmitResult(false, msg)
+            }
+
             logs.add("Acquiring GPS location for $reason", LogType.INFO)
             val loc = try {
-                ensureFreshLocation(context, settings)
+                location ?: ensureFreshLocation(context, settings)
             } catch (e: Exception) {
                 val msg = "GPS acquisition failed: ${e.message ?: "Unknown error"}"
                 logs.add(msg, LogType.ERROR)
@@ -54,6 +67,11 @@ object Transmitter {
             val type = if (result.success) LogType.SUCCESS else LogType.ERROR
             logs.add(result.message, type)
             BeaconRuntime.emitToast(result.message, type)
+            if (result.success) {
+                settings.lastTxAtMs = System.currentTimeMillis()
+                settings.lastTxLat = loc.latitude
+                settings.lastTxLon = loc.longitude
+            }
             return result
         } finally {
             BeaconRuntime.setBusy(false)
