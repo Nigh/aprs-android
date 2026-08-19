@@ -25,7 +25,15 @@ data class TransmitResult(
 
 object Aprs {
     const val MIN_INTERVAL_SEC = 30
+    const val MAX_INTERVAL_SEC = 3600
+    const val DEFAULT_MAX_INTERVAL_SEC = 300
+    const val MIN_MOVE_M = 100
+    const val MAX_MOVE_M = 1000
+    const val DEFAULT_MOVE_M = 100
     const val STALE_LOCATION_MS = 60_000L
+
+    fun clampIntervalSec(v: Int): Int = v.coerceIn(MIN_INTERVAL_SEC, MAX_INTERVAL_SEC)
+    fun clampMoveM(v: Int): Int = v.coerceIn(MIN_MOVE_M, MAX_MOVE_M)
 
     fun formatLatitude(lat: Double): String {
         val absLat = kotlin.math.abs(lat)

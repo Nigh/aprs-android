@@ -48,12 +48,17 @@ class MainActivity : ComponentActivity() {
             val logList by logs.logs.collectAsState()
             val toast by BeaconRuntime.toast.collectAsState()
 
+            val pollInterval by BeaconRuntime.intervalSec.collectAsState()
+
             var screen by remember { mutableStateOf("main") }
             var callsign by remember { mutableStateOf(settings.callsign) }
             var passcode by remember { mutableStateOf(settings.passcode) }
             var comment by remember { mutableStateOf(settings.commentText) }
             var status by remember { mutableStateOf(settings.statusText) }
-            var interval by remember { mutableStateOf(settings.scheduleIntervalSec.toString()) }
+            var minInterval by remember { mutableStateOf(settings.minIntervalSec) }
+            var maxInterval by remember { mutableStateOf(settings.maxIntervalSec) }
+            var smartMove by remember { mutableStateOf(settings.smartMoveEnabled) }
+            var moveThreshold by remember { mutableStateOf(settings.moveThresholdM) }
 
             LaunchedEffect(toast) {
                 val t = toast ?: return@LaunchedEffect
@@ -77,8 +82,10 @@ class MainActivity : ComponentActivity() {
                         "settings" -> SettingsScreen(
                             autoStartOnWifiDisconnect = autoStartWifi,
                             autoStopOnWifiConnect = autoStopWifi,
-                            intervalSec = interval.toIntOrNull()?.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
-                                ?: settings.scheduleIntervalSec,
+                            minIntervalSec = minInterval,
+                            maxIntervalSec = maxInterval,
+                            smartMove = smartMove,
+                            moveThresholdM = moveThreshold,
                             stopZones = stopZones,
                             onAutoStartOnWifiDisconnect = {
                                 autoStartWifi = it
@@ -89,6 +96,24 @@ class MainActivity : ComponentActivity() {
                                 autoStopWifi = it
                                 settings.autoStopOnWifiConnect = it
                                 WifiAutoBeacon.ensureListening(this@MainActivity)
+                            },
+                            onMinInterval = {
+                                settings.minIntervalSec = it
+                                minInterval = settings.minIntervalSec
+                                maxInterval = settings.maxIntervalSec
+                            },
+                            onMaxInterval = {
+                                settings.maxIntervalSec = it
+                                maxInterval = settings.maxIntervalSec
+                            },
+                            onSmartMove = {
+                                settings.smartMoveEnabled = it
+                                smartMove = it
+                                maxInterval = settings.maxIntervalSec
+                            },
+                            onMoveThreshold = {
+                                settings.moveThresholdM = it
+                                moveThreshold = settings.moveThresholdM
                             },
                             onStopZonesChange = {
                                 stopZones = it
@@ -118,11 +143,15 @@ class MainActivity : ComponentActivity() {
                             passcode = passcode,
                             comment = comment,
                             status = status,
-                            interval = interval,
                             location = location,
                             busy = busy,
                             scheduling = active,
                             countdownSec = countdown,
+                            pollIntervalSec = pollInterval,
+                            minIntervalSec = minInterval,
+                            maxIntervalSec = maxInterval,
+                            smartMove = smartMove,
+                            moveThresholdM = moveThreshold,
                             onCallsign = {
                                 callsign = it
                                 settings.callsign = it
@@ -138,10 +167,6 @@ class MainActivity : ComponentActivity() {
                             onStatus = {
                                 status = it
                                 settings.statusText = it
-                            },
-                            onInterval = {
-                                interval = it
-                                it.toIntOrNull()?.let { n -> settings.scheduleIntervalSec = n }
                             },
                             onGps = {
                                 ensureRuntimePermissions()
@@ -193,14 +218,6 @@ class MainActivity : ComponentActivity() {
                                     BeaconRuntime.emitToast(v.message ?: "Validation failed", LogType.ERROR)
                                     return@MainScreen
                                 }
-                                val sec = interval.toIntOrNull() ?: 0
-                                if (sec < Aprs.MIN_INTERVAL_SEC) {
-                                    val msg = "Minimum interval is ${Aprs.MIN_INTERVAL_SEC} seconds"
-                                    logs.add(msg, LogType.ERROR)
-                                    BeaconRuntime.emitToast(msg, LogType.ERROR)
-                                    return@MainScreen
-                                }
-                                settings.scheduleIntervalSec = sec
                                 ensureRuntimePermissions()
                                 if (!LocationHelper.hasFineLocation(this@MainActivity)) {
                                     BeaconRuntime.emitToast("Location permission required", LogType.ERROR)

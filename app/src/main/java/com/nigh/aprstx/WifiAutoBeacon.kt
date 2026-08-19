@@ -55,7 +55,7 @@ fun wifiAutoAction(
 
 /**
  * Listens for WiFi up/down while process is alive.
- * Disconnect + autoStart → wait one scheduleInterval then BeaconService.start;
+ * Disconnect + autoStart → wait one minInterval then BeaconService.start;
  * if listening starts connected, disconnect continuously for 100s before connect + autoStop is armed.
  * ponytail: no Application FGS — dies with process.
  */
@@ -190,7 +190,7 @@ object WifiAutoBeacon {
         ) {
             WifiAutoAction.SCHEDULE_START -> {
                 cancelPending()
-                val intervalSec = settings.scheduleIntervalSec.coerceAtLeast(Aprs.MIN_INTERVAL_SEC)
+                val intervalSec = settings.minIntervalSec
                 AppGraph.logs.add(
                     "WiFi disconnected — auto-start in ${intervalSec}s",
                     LogType.INFO,
