@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,12 +37,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,6 +54,16 @@ import java.util.Date
 import java.util.Locale
 
 private const val GITHUB_URL = "https://github.com/Nigh/aprs-android"
+
+@Composable
+private fun settingsSwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+    checkedTrackColor = MaterialTheme.colorScheme.primary,
+    checkedBorderColor = MaterialTheme.colorScheme.primary,
+    uncheckedThumbColor = MaterialTheme.colorScheme.onSurface,
+    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+    uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+)
 
 @Composable
 fun MainScreen(
@@ -77,6 +91,8 @@ fun MainScreen(
     onOpenLogs: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    var passcodeFocused by remember { mutableStateOf(false) }
+
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -108,11 +124,17 @@ fun MainScreen(
                     value = passcode,
                     onValueChange = onPasscode,
                     label = { Text("Passcode *") },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .onFocusChanged { passcodeFocused = it.isFocused },
                     enabled = !scheduling,
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = if (passcodeFocused) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
 
@@ -213,6 +235,7 @@ fun MainScreen(
 fun SettingsScreen(
     autoStartOnWifiDisconnect: Boolean,
     autoStopOnWifiConnect: Boolean,
+    autoPowerSave: Boolean,
     minIntervalSec: Int,
     maxIntervalSec: Int,
     smartMove: Boolean,
@@ -220,6 +243,7 @@ fun SettingsScreen(
     stopZones: List<StopZone>,
     onAutoStartOnWifiDisconnect: (Boolean) -> Unit,
     onAutoStopOnWifiConnect: (Boolean) -> Unit,
+    onAutoPowerSave: (Boolean) -> Unit,
     onMinInterval: (Int) -> Unit,
     onMaxInterval: (Int) -> Unit,
     onSmartMove: (Boolean) -> Unit,
@@ -344,7 +368,11 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = smartMove, onCheckedChange = onSmartMove)
+                Switch(
+                    checked = smartMove,
+                    onCheckedChange = onSmartMove,
+                    colors = settingsSwitchColors(),
+                )
             }
             if (smartMove) {
                 OutlinedTextField(
@@ -370,6 +398,28 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("Automatic power saving", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "3× GPS timeout → +${GpsPowerSave.STEP_SEC}s poll (max ${GpsPowerSave.MAX_INTERVAL_SEC}s); skip if min ≥${GpsPowerSave.MAX_INTERVAL_SEC}s",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = autoPowerSave,
+                    onCheckedChange = onAutoPowerSave,
+                    colors = settingsSwitchColors(),
+                )
+            }
+
+            HorizontalDivider()
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
                     Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
                     Text(
                 "Starts after one min interval (${minIntervalSec}s) disconnected; WiFi stop arms after 100s disconnected",
@@ -380,6 +430,7 @@ fun SettingsScreen(
                 Switch(
                     checked = autoStartOnWifiDisconnect,
                     onCheckedChange = onAutoStartOnWifiDisconnect,
+                    colors = settingsSwitchColors(),
                 )
             }
 
@@ -401,6 +452,7 @@ fun SettingsScreen(
                 Switch(
                     checked = autoStopOnWifiConnect,
                     onCheckedChange = onAutoStopOnWifiConnect,
+                    colors = settingsSwitchColors(),
                 )
             }
 
@@ -411,7 +463,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "Auto-stop when entering an enabled zone (after leaving all +${StopZone.CLEAR_EXTRA_M}m if started inside)",
+                "Auto-stop when entering an enabled zone (clearance +${StopZone.CLEAR_EXTRA_M}m, or +${StopZone.LARGE_CLEAR_EXTRA_M}m above ${StopZone.LARGE_RADIUS_THRESHOLD_M}m radius)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -462,6 +514,8 @@ fun SettingsScreen(
                         onStopZonesChange(
                             stopZones + StopZone(lat, lon, StopZone.DEFAULT_RADIUS_M, enabled = true),
                         )
+                        previewLat = ""
+                        previewLon = ""
                     },
                     enabled = stopZones.size < StopZone.MAX_ZONES &&
                         previewLat.toDoubleOrNull() != null &&
@@ -489,6 +543,7 @@ fun SettingsScreen(
                                 it[index] = zone.copy(enabled = on)
                             })
                         },
+                        colors = settingsSwitchColors(),
                     )
                 }
                 Row(
@@ -549,9 +604,13 @@ fun SettingsScreen(
         Column(
             Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            TextButton(onClick = { uriHandler.openUri(GITHUB_URL) }) {
+            TextButton(
+                onClick = { uriHandler.openUri(GITHUB_URL) },
+                modifier = Modifier.height(32.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) {
                 Text("github.com/Nigh/aprs-android")
             }
             Text(

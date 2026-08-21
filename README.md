@@ -26,6 +26,7 @@ Each TX is a short-lived session: connect → `user … pass … vers APRS-TX 1.
 - WiFi disconnect auto-start and reconnect auto-stop (auto-stop arms after 100s continuously disconnected when listening starts connected)
 - Callsign / passcode validation, comment + status fields
 - Settings + operation logs persisted locally; Settings JSON export/import for reinstall
+- Auto power-save: back off GPS poll after repeated timeouts indoors
 
 ## Power / background design
 

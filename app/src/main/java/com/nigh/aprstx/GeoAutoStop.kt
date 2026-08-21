@@ -9,11 +9,16 @@ data class StopZone(
     companion object {
         const val MAX_ZONES = 16
         const val MIN_RADIUS_M = 50
-        const val MAX_RADIUS_M = 1000
+        const val MAX_RADIUS_M = 5000
         const val DEFAULT_RADIUS_M = 100
         const val CLEAR_EXTRA_M = 50
+        const val LARGE_RADIUS_THRESHOLD_M = 1000
+        const val LARGE_CLEAR_EXTRA_M = 100
 
         fun clampRadius(m: Int): Int = m.coerceIn(MIN_RADIUS_M, MAX_RADIUS_M)
+
+        fun clearExtraM(radiusM: Int): Int =
+            if (radiusM > LARGE_RADIUS_THRESHOLD_M) LARGE_CLEAR_EXTRA_M else CLEAR_EXTRA_M
     }
 }
 
@@ -36,7 +41,7 @@ fun geoAutoStopStep(
 
     fun insideAny() = active.any { dist(it) <= it.radiusM }
 
-    fun clearedAll() = active.all { dist(it) > it.radiusM + StopZone.CLEAR_EXTRA_M }
+    fun clearedAll() = active.all { dist(it) > it.radiusM + StopZone.clearExtraM(it.radiusM) }
 
     return when (arm) {
         GeoArm.UNKNOWN -> {

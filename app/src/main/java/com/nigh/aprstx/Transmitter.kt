@@ -8,13 +8,14 @@ object Transmitter {
         context: Context,
         settings: SettingsStore,
         maxAgeMs: Long = Aprs.STALE_LOCATION_MS,
+        maxFallbackAgeMs: Long = Long.MAX_VALUE,
     ): AprsLocation {
         val previous = settings.lastLocation ?: BeaconRuntime.lastLocation.value
         if (previous != null && !Aprs.isLocationStale(previous, maxAgeMs)) {
             BeaconRuntime.setLocation(previous)
             return previous
         }
-        return LocationHelper.getLocation(context, previous).also {
+        return LocationHelper.getLocation(context, previous, maxFallbackAgeMs = maxFallbackAgeMs).also {
             settings.lastLocation = it
             BeaconRuntime.setLocation(it)
         }
