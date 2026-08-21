@@ -16,6 +16,7 @@ data class SettingsBackup(
     val moveThresholdM: Int = Aprs.DEFAULT_MOVE_M,
     val autoStartOnWifiDisconnect: Boolean = false,
     val autoStopOnWifiConnect: Boolean = false,
+    val autoPowerSaveEnabled: Boolean = true,
     val stopZones: List<StopZone> = emptyList(),
 )
 
@@ -42,6 +43,7 @@ fun encodeSettingsBackup(b: SettingsBackup): String {
         .put("moveThresholdM", b.moveThresholdM)
         .put("autoStartOnWifiDisconnect", b.autoStartOnWifiDisconnect)
         .put("autoStopOnWifiConnect", b.autoStopOnWifiConnect)
+        .put("autoPowerSaveEnabled", b.autoPowerSaveEnabled)
         .put("stopZones", zones)
         .toString()
 }
@@ -73,6 +75,7 @@ fun decodeSettingsBackup(raw: String): SettingsBackup? = runCatching {
         moveThresholdM = o.optInt("moveThresholdM", Aprs.DEFAULT_MOVE_M),
         autoStartOnWifiDisconnect = o.optBoolean("autoStartOnWifiDisconnect", false),
         autoStopOnWifiConnect = o.optBoolean("autoStopOnWifiConnect", false),
+        autoPowerSaveEnabled = o.optBoolean("autoPowerSaveEnabled", true),
         stopZones = zones,
     )
 }.getOrNull()
@@ -159,6 +162,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("autoStopOnWifiConnect", false)
         set(v) = prefs.edit().putBoolean("autoStopOnWifiConnect", v).apply()
 
+    var autoPowerSaveEnabled: Boolean
+        get() = prefs.getBoolean("autoPowerSaveEnabled", true)
+        set(v) = prefs.edit().putBoolean("autoPowerSaveEnabled", v).apply()
+
     var stopZones: List<StopZone>
         get() {
             val raw = prefs.getString("stopZones", null) ?: return emptyList()
@@ -231,6 +238,7 @@ class SettingsStore(context: Context) {
         moveThresholdM = moveThresholdM,
         autoStartOnWifiDisconnect = autoStartOnWifiDisconnect,
         autoStopOnWifiConnect = autoStopOnWifiConnect,
+        autoPowerSaveEnabled = autoPowerSaveEnabled,
         stopZones = stopZones,
     )
 
@@ -245,6 +253,7 @@ class SettingsStore(context: Context) {
         moveThresholdM = b.moveThresholdM
         autoStartOnWifiDisconnect = b.autoStartOnWifiDisconnect
         autoStopOnWifiConnect = b.autoStopOnWifiConnect
+        autoPowerSaveEnabled = b.autoPowerSaveEnabled
         stopZones = b.stopZones
     }
 

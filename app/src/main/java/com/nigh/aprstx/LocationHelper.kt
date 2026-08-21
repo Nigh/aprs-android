@@ -27,7 +27,16 @@ object LocationHelper {
      * Prefers a fresh last-known fix (&lt;30s) to avoid waking GPS when possible;
      * otherwise one update then removes the listener.
      */
-    suspend fun getLocation(context: Context, previous: AprsLocation?, timeoutMs: Long = 20_000L): AprsLocation {
+    /**
+     * @param maxFallbackAgeMs on timeout, only accept last-known younger than this;
+     *   [Long.MAX_VALUE] keeps legacy “any last-known” behavior.
+     */
+    suspend fun getLocation(
+        context: Context,
+        previous: AprsLocation?,
+        timeoutMs: Long = 20_000L,
+        maxFallbackAgeMs: Long = Long.MAX_VALUE,
+    ): AprsLocation {
         if (!hasFineLocation(context)) {
             throw SecurityException("Location permission not granted")
         }
@@ -72,7 +81,7 @@ object LocationHelper {
                     } catch (_: Exception) {
                     }
                     val fallback = bestLastKnown(lm)
-                    if (fallback != null) {
+                    if (fallback != null && ageMs(fallback) <= maxFallbackAgeMs) {
                         cont.resume(toAprs(fallback, previous))
                     } else {
                         cont.resumeWithException(Exception("GPS location timeout"))
@@ -91,8 +100,11 @@ object LocationHelper {
                                 cont.resume(toAprs(loc, previous))
                             } else {
                                 val fallback = bestLastKnown(lm)
-                                if (fallback != null) cont.resume(toAprs(fallback, previous))
-                                else cont.resumeWithException(Exception("GPS location unavailable"))
+                                if (fallback != null && ageMs(fallback) <= maxFallbackAgeMs) {
+                                    cont.resume(toAprs(fallback, previous))
+                                } else {
+                                    cont.resumeWithException(Exception("GPS location unavailable"))
+                                }
                             }
                         }
                     }

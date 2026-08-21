@@ -189,6 +189,33 @@ class AprsTest {
     }
 
     @Test
+    fun geoAutoStopUsesLargerClearanceAboveOneKilometer() {
+        assertEquals(5000, StopZone.clampRadius(6000))
+        assertEquals(50, StopZone.clearExtraM(1000))
+        assertEquals(100, StopZone.clearExtraM(1001))
+
+        val zone = StopZone(0.0, 0.0, radiusM = 1500, enabled = true)
+        val insideLargeClearance = 1575.0 / 111_000.0
+        val beyondLargeClearance = 1610.0 / 111_000.0
+
+        val stillNear = geoAutoStopStep(
+            insideLargeClearance,
+            0.0,
+            listOf(zone),
+            GeoArm.NEED_CLEAR,
+        )
+        assertEquals(GeoArm.NEED_CLEAR, stillNear.arm)
+
+        val armed = geoAutoStopStep(
+            beyondLargeClearance,
+            0.0,
+            listOf(zone),
+            GeoArm.NEED_CLEAR,
+        )
+        assertEquals(GeoArm.ARMED, armed.arm)
+    }
+
+    @Test
     fun geoAutoStopIgnoresDisabledAndEmpty() {
         val disabled = StopZone(0.0, 0.0, radiusM = 100, enabled = false)
         val atCenter = geoAutoStopStep(0.0, 0.0, listOf(disabled), GeoArm.ARMED)
@@ -247,6 +274,7 @@ class AprsTest {
             moveThresholdM = 200,
             autoStartOnWifiDisconnect = true,
             autoStopOnWifiConnect = false,
+            autoPowerSaveEnabled = false,
             stopZones = listOf(
                 StopZone(22.5, 114.0, 150, enabled = true),
                 StopZone(-1.0, 2.0, 50, enabled = false),
@@ -255,5 +283,47 @@ class AprsTest {
         val decoded = decodeSettingsBackup(encodeSettingsBackup(original))
         assertEquals(original, decoded)
         assertEquals(null, decodeSettingsBackup("not-json"))
+        // legacy JSON without autoPowerSaveEnabled → default on
+        val legacy = decodeSettingsBackup("""{"v":1,"callsign":"N0CALL"}""")
+        assertEquals(true, legacy?.autoPowerSaveEnabled)
+    }
+
+    @Test
+    fun gpsPowerSaveBackoffAndRecover() {
+        var s = GpsPowerSaveState(0, 60)
+        s = gpsPowerSaveStep(enabled = true, gpsOk = false, state = s, baseMinSec = 60)
+        assertEquals(1, s.failStreak)
+        assertEquals(60, s.gpsIntervalSec)
+        s = gpsPowerSaveStep(enabled = true, gpsOk = false, state = s, baseMinSec = 60)
+        assertEquals(2, s.failStreak)
+        s = gpsPowerSaveStep(enabled = true, gpsOk = false, state = s, baseMinSec = 60)
+        assertEquals(0, s.failStreak)
+        assertEquals(90, s.gpsIntervalSec)
+
+        // bump until cap
+        repeat(20) {
+            repeat(3) {
+                s = gpsPowerSaveStep(enabled = true, gpsOk = false, state = s, baseMinSec = 60)
+            }
+        }
+        assertEquals(300, s.gpsIntervalSec)
+
+        s = gpsPowerSaveStep(enabled = true, gpsOk = true, state = s, baseMinSec = 60)
+        assertEquals(0, s.failStreak)
+        assertEquals(60, s.gpsIntervalSec)
+
+        // disabled ignores failures
+        s = GpsPowerSaveState(2, 90)
+        s = gpsPowerSaveStep(enabled = false, gpsOk = false, state = s, baseMinSec = 60)
+        assertEquals(0, s.failStreak)
+        assertEquals(60, s.gpsIntervalSec)
+
+        // min already ≥300s → no backoff
+        s = GpsPowerSaveState(2, 600)
+        repeat(5) {
+            s = gpsPowerSaveStep(enabled = true, gpsOk = false, state = s, baseMinSec = 600)
+        }
+        assertEquals(0, s.failStreak)
+        assertEquals(600, s.gpsIntervalSec)
     }
 }

@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,7 +69,12 @@ class MainActivity : ComponentActivity() {
 
             var autoStartWifi by remember { mutableStateOf(settings.autoStartOnWifiDisconnect) }
             var autoStopWifi by remember { mutableStateOf(settings.autoStopOnWifiConnect) }
+            var autoPowerSave by remember { mutableStateOf(settings.autoPowerSaveEnabled) }
             var stopZones by remember { mutableStateOf(settings.stopZones) }
+
+            BackHandler(enabled = screen != "main") {
+                screen = "main"
+            }
 
             XianiiTheme {
                 // targetSdk 35 edge-to-edge: keep content clear of status/nav bars
@@ -82,6 +88,7 @@ class MainActivity : ComponentActivity() {
                         "settings" -> SettingsScreen(
                             autoStartOnWifiDisconnect = autoStartWifi,
                             autoStopOnWifiConnect = autoStopWifi,
+                            autoPowerSave = autoPowerSave,
                             minIntervalSec = minInterval,
                             maxIntervalSec = maxInterval,
                             smartMove = smartMove,
@@ -96,6 +103,10 @@ class MainActivity : ComponentActivity() {
                                 autoStopWifi = it
                                 settings.autoStopOnWifiConnect = it
                                 WifiAutoBeacon.ensureListening(this@MainActivity)
+                            },
+                            onAutoPowerSave = {
+                                autoPowerSave = it
+                                settings.autoPowerSaveEnabled = it
                             },
                             onMinInterval = {
                                 settings.minIntervalSec = it
@@ -149,6 +160,7 @@ class MainActivity : ComponentActivity() {
                                 moveThreshold = settings.moveThresholdM
                                 autoStartWifi = settings.autoStartOnWifiDisconnect
                                 autoStopWifi = settings.autoStopOnWifiConnect
+                                autoPowerSave = settings.autoPowerSaveEnabled
                                 stopZones = settings.stopZones
                                 WifiAutoBeacon.ensureListening(this@MainActivity)
                                 true

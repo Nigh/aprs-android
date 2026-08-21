@@ -87,29 +87,41 @@ class BeaconService : Service() {
 
         loopJob = scope.launch {
             var geoArm = GeoArm.UNKNOWN
+            var powerSave = GpsPowerSaveState(0, AppGraph.settings.minIntervalSec)
             var first = true
             while (isActive) {
-                val minSec = AppGraph.settings.minIntervalSec
+                val settings = AppGraph.settings
+                val minSec = settings.minIntervalSec
+                val powerSaveActive =
+                    settings.autoPowerSaveEnabled && minSec < GpsPowerSave.MAX_INTERVAL_SEC
+                if (!powerSaveActive) {
+                    powerSave = GpsPowerSaveState(0, minSec)
+                }
+                val pollSec = if (powerSaveActive) {
+                    powerSave.gpsIntervalSec.coerceAtLeast(minSec)
+                } else {
+                    minSec
+                }
                 val waitSec = if (first) {
                     first = false
                     remainingUntilIntervalSec(
                         System.currentTimeMillis(),
-                        AppGraph.settings.lastTxAtMs,
-                        minSec,
+                        settings.lastTxAtMs,
+                        pollSec,
                     )
                 } else {
-                    minSec
+                    pollSec
                 }
-                BeaconRuntime.setInterval(if (waitSec > 0) waitSec else minSec)
+                BeaconRuntime.setInterval(if (waitSec > 0) waitSec else pollSec)
                 var remaining = waitSec
                 BeaconRuntime.setCountdown(remaining)
-                updateNotification(minSec, remaining)
+                updateNotification(pollSec, remaining)
                 while (isActive && remaining > 0) {
                     delay(1000)
                     remaining--
                     BeaconRuntime.setCountdown(remaining)
                     if (remaining % 5 == 0 || remaining <= 5) {
-                        updateNotification(minSec, remaining)
+                        updateNotification(pollSec, remaining)
                     }
                 }
                 if (!isActive) break
@@ -122,9 +134,37 @@ class BeaconService : Service() {
                             this@BeaconService,
                             settings,
                             maxAgeMs = 0L,
+                            maxFallbackAgeMs = if (powerSaveActive) {
+                                GpsPowerSave.MAX_FALLBACK_AGE_MS
+                            } else {
+                                Long.MAX_VALUE
+                            },
                         )
                     } catch (_: Exception) {
                         null
+                    }
+                    val prevInterval = powerSave.gpsIntervalSec
+                    powerSave = gpsPowerSaveStep(
+                        enabled = powerSaveActive,
+                        gpsOk = loc != null,
+                        state = powerSave,
+                        baseMinSec = settings.minIntervalSec,
+                    )
+                    if (powerSaveActive) {
+                        when {
+                            powerSave.gpsIntervalSec > prevInterval -> {
+                                AppGraph.logs.add(
+                                    "Auto power-save: GPS interval → ${powerSave.gpsIntervalSec}s",
+                                    LogType.INFO,
+                                )
+                            }
+                            loc != null && prevInterval > settings.minIntervalSec -> {
+                                AppGraph.logs.add(
+                                    "Auto power-save: GPS ok — interval restored to ${settings.minIntervalSec}s",
+                                    LogType.INFO,
+                                )
+                            }
+                        }
                     }
                     if (loc != null) {
                         val step = geoAutoStopStep(
