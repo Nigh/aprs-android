@@ -4,6 +4,79 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** User settings for export/import (no lastTx / lastLocation). */
+data class SettingsBackup(
+    val callsign: String = "",
+    val passcode: String = "",
+    val commentText: String = "",
+    val statusText: String = "",
+    val minIntervalSec: Int = 60,
+    val maxIntervalSec: Int = Aprs.DEFAULT_MAX_INTERVAL_SEC,
+    val smartMoveEnabled: Boolean = false,
+    val moveThresholdM: Int = Aprs.DEFAULT_MOVE_M,
+    val autoStartOnWifiDisconnect: Boolean = false,
+    val autoStopOnWifiConnect: Boolean = false,
+    val stopZones: List<StopZone> = emptyList(),
+)
+
+fun encodeSettingsBackup(b: SettingsBackup): String {
+    val zones = JSONArray()
+    b.stopZones.take(StopZone.MAX_ZONES).forEach { z ->
+        zones.put(
+            JSONObject()
+                .put("lat", z.latitude)
+                .put("lon", z.longitude)
+                .put("radiusM", StopZone.clampRadius(z.radiusM))
+                .put("enabled", z.enabled),
+        )
+    }
+    return JSONObject()
+        .put("v", 1)
+        .put("callsign", b.callsign)
+        .put("passcode", b.passcode)
+        .put("commentText", b.commentText)
+        .put("statusText", b.statusText)
+        .put("minIntervalSec", b.minIntervalSec)
+        .put("maxIntervalSec", b.maxIntervalSec)
+        .put("smartMoveEnabled", b.smartMoveEnabled)
+        .put("moveThresholdM", b.moveThresholdM)
+        .put("autoStartOnWifiDisconnect", b.autoStartOnWifiDisconnect)
+        .put("autoStopOnWifiConnect", b.autoStopOnWifiConnect)
+        .put("stopZones", zones)
+        .toString()
+}
+
+fun decodeSettingsBackup(raw: String): SettingsBackup? = runCatching {
+    val o = JSONObject(raw)
+    val arr = o.optJSONArray("stopZones") ?: JSONArray()
+    val zones = buildList {
+        for (i in 0 until minOf(arr.length(), StopZone.MAX_ZONES)) {
+            val z = arr.getJSONObject(i)
+            add(
+                StopZone(
+                    latitude = z.getDouble("lat"),
+                    longitude = z.getDouble("lon"),
+                    radiusM = StopZone.clampRadius(z.optInt("radiusM", StopZone.DEFAULT_RADIUS_M)),
+                    enabled = z.optBoolean("enabled", true),
+                ),
+            )
+        }
+    }
+    SettingsBackup(
+        callsign = o.optString("callsign", ""),
+        passcode = o.optString("passcode", ""),
+        commentText = o.optString("commentText", ""),
+        statusText = o.optString("statusText", ""),
+        minIntervalSec = o.optInt("minIntervalSec", 60),
+        maxIntervalSec = o.optInt("maxIntervalSec", Aprs.DEFAULT_MAX_INTERVAL_SEC),
+        smartMoveEnabled = o.optBoolean("smartMoveEnabled", false),
+        moveThresholdM = o.optInt("moveThresholdM", Aprs.DEFAULT_MOVE_M),
+        autoStartOnWifiDisconnect = o.optBoolean("autoStartOnWifiDisconnect", false),
+        autoStopOnWifiConnect = o.optBoolean("autoStopOnWifiConnect", false),
+        stopZones = zones,
+    )
+}.getOrNull()
+
 class SettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("aprs-settings", Context.MODE_PRIVATE)
 
@@ -146,4 +219,40 @@ class SettingsStore(context: Context) {
             if (v.speedMps != null) e.putFloat("spd", v.speedMps) else e.remove("spd")
             e.apply()
         }
+
+    fun toBackup() = SettingsBackup(
+        callsign = callsign,
+        passcode = passcode,
+        commentText = commentText,
+        statusText = statusText,
+        minIntervalSec = minIntervalSec,
+        maxIntervalSec = maxIntervalSec,
+        smartMoveEnabled = smartMoveEnabled,
+        moveThresholdM = moveThresholdM,
+        autoStartOnWifiDisconnect = autoStartOnWifiDisconnect,
+        autoStopOnWifiConnect = autoStopOnWifiConnect,
+        stopZones = stopZones,
+    )
+
+    fun applyBackup(b: SettingsBackup) {
+        callsign = b.callsign
+        passcode = b.passcode
+        commentText = b.commentText
+        statusText = b.statusText
+        smartMoveEnabled = b.smartMoveEnabled
+        minIntervalSec = b.minIntervalSec
+        maxIntervalSec = b.maxIntervalSec
+        moveThresholdM = b.moveThresholdM
+        autoStartOnWifiDisconnect = b.autoStartOnWifiDisconnect
+        autoStopOnWifiConnect = b.autoStopOnWifiConnect
+        stopZones = b.stopZones
+    }
+
+    fun exportJson(): String = encodeSettingsBackup(toBackup())
+
+    fun importJson(raw: String): Boolean {
+        val b = decodeSettingsBackup(raw) ?: return false
+        applyBackup(b)
+        return true
+    }
 }

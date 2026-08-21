@@ -1,5 +1,7 @@
 package com.nigh.aprstx
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,13 +35,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -221,13 +226,62 @@ fun SettingsScreen(
     onMoveThreshold: (Int) -> Unit,
     onStopZonesChange: (List<StopZone>) -> Unit,
     onFetchGps: suspend () -> AprsLocation,
+    onExportJson: () -> String,
+    onImportJson: (String) -> Boolean,
     onBack: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var previewLat by remember { mutableStateOf("") }
     var previewLon by remember { mutableStateOf("") }
     var gpsBusy by remember { mutableStateOf(false) }
+    var backupBusy by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            backupBusy = true
+            try {
+                val json = onExportJson()
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(json.toByteArray(Charsets.UTF_8))
+                    } ?: error("openOutputStream failed")
+                }
+                BeaconRuntime.emitToast("Settings exported", LogType.SUCCESS)
+            } catch (e: Exception) {
+                BeaconRuntime.emitToast("Export failed: ${e.message}", LogType.ERROR)
+            } finally {
+                backupBusy = false
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            backupBusy = true
+            try {
+                val raw = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                        ?: error("openInputStream failed")
+                }
+                if (onImportJson(raw)) {
+                    BeaconRuntime.emitToast("Settings imported", LogType.SUCCESS)
+                } else {
+                    BeaconRuntime.emitToast("Import failed: invalid file", LogType.ERROR)
+                }
+            } catch (e: Exception) {
+                BeaconRuntime.emitToast("Import failed: ${e.message}", LogType.ERROR)
+            } finally {
+                backupBusy = false
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Column(
@@ -468,6 +522,27 @@ fun SettingsScreen(
                         },
                     ) { Text("Remove") }
                 }
+            }
+
+            HorizontalDivider()
+
+            Text("Backup", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Export/import callsign, intervals, WiFi, and stop zones as JSON",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { exportLauncher.launch("aprs-tx-settings.json") },
+                    enabled = !backupBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Export") }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) },
+                    enabled = !backupBusy,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Import") }
             }
         }
 

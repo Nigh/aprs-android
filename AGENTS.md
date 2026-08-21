@@ -40,7 +40,8 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `GeoAutoStop.kt` | 停发地点（最多 16，每区 enabled + 半径 50–1000m）；`geoAutoStopStep` 状态机 |
 | `SmartBeacon.kt` | 最小/最大间隔与位移 TX 判定（`shouldBeaconTx`）；任意两次发包 ≥30s |
 | `Transmitter.kt` | GPS+发包共享逻辑；成功 TX 记 lastTx；全局 30s cooldown |
-| `MainActivity.kt` / `Ui.kt` | 主界面（Send once / Start scheduled TX；Settings 右下角）+ Settings（min/max interval、位移 TX、WiFi、Stop zones、底栏 GitHub / made by BA7NTM）+ Logs；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
+| `MainActivity.kt` / `Ui.kt` | 主界面（Send once / Start scheduled TX；Settings 右下角）+ Settings（min/max interval、位移 TX、WiFi、Stop zones、JSON 导入/导出、底栏 GitHub / made by BA7NTM）+ Logs；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
+| `SettingsStore.kt` | SharedPreferences；`SettingsBackup` JSON 编解码（不含 lastTx/位置） |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
 | `res/mipmap-anydpi/ic_launcher*.xml` | 自适应 launcher icon（fg 居中缩至 60% / bg 全幅 → `drawable/ic_launcher_{foreground,background}.png`） |
 | `docs/icon.png` | README 顶部预览（合成 fg/bg） |
@@ -52,6 +53,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - 定时发送**必须**走 `BeaconService`（FGS），不要用普通后台线程/WorkManager（&lt;15min 间隔）。
 - 任意两次成功发包间隔 ≥30s（手动 Send once 与 scheduled 共用 `lastTxAtMs`）。
 - Settings：min interval 30–3600s（默认 60）；max ≤3600 且 ≥ min（默认 300）；位移阈值默认 100m（100–1000）。位移 TX 默认关：只编 min，max 跟随 min；开启后 GPS 按 min 取点，位移 ≥阈值则按 min 发包，否则到 max 强制发包。
+- Settings 备份：Export/Import JSON（呼号、passcode、comment/status、间隔与位移、WiFi、Stop zones；不含 lastTx/位置）；SAF `CreateDocument`/`OpenDocument`。
 - 每轮只做一次单次定位；手动 TX 位置未过期（60s）则复用；scheduled GPS 轮次强制刷新。
 - 禁止连续 `requestLocationUpdates`；禁止 screen wake lock。
 - TX 前后 `PARTIAL_WAKE_LOCK` ≤60s，间隔内仅 `delay` 倒计时。
@@ -61,4 +63,4 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 
 ## 自检
 
-- `./build.sh test` / `.\build.ps1 test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop、min/max/位移 TX 判定）。
+- `./build.sh test` / `.\build.ps1 test` → `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop、min/max/位移 TX 判定、Settings JSON 备份往返）。
