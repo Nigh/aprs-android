@@ -233,4 +233,27 @@ class AprsTest {
         assertTrue(forced.send)
         assertEquals(BeaconTxReason.MAX_INTERVAL, forced.reason)
     }
+
+    @Test
+    fun settingsBackupRoundTrip() {
+        val original = SettingsBackup(
+            callsign = "BA7NTM-7",
+            passcode = "12345",
+            commentText = "hello",
+            statusText = "on air",
+            minIntervalSec = 90,
+            maxIntervalSec = 600,
+            smartMoveEnabled = true,
+            moveThresholdM = 200,
+            autoStartOnWifiDisconnect = true,
+            autoStopOnWifiConnect = false,
+            stopZones = listOf(
+                StopZone(22.5, 114.0, 150, enabled = true),
+                StopZone(-1.0, 2.0, 50, enabled = false),
+            ),
+        )
+        val decoded = decodeSettingsBackup(encodeSettingsBackup(original))
+        assertEquals(original, decoded)
+        assertEquals(null, decodeSettingsBackup("not-json"))
+    }
 }

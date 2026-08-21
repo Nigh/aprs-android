@@ -59,4 +59,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     testImplementation("junit:junit:4.13.2")
+    // JVM unit tests: android.jar stubs org.json; real impl for SettingsBackup encode/decode
+    testImplementation("org.json:json:20240303")
 }

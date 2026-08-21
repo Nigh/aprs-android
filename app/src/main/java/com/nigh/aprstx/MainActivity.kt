@@ -136,6 +136,23 @@ class MainActivity : ComponentActivity() {
                                     throw e
                                 }
                             },
+                            onExportJson = { settings.exportJson() },
+                            onImportJson = { raw ->
+                                if (!settings.importJson(raw)) return@SettingsScreen false
+                                callsign = settings.callsign
+                                passcode = settings.passcode
+                                comment = settings.commentText
+                                status = settings.statusText
+                                smartMove = settings.smartMoveEnabled
+                                minInterval = settings.minIntervalSec
+                                maxInterval = settings.maxIntervalSec
+                                moveThreshold = settings.moveThresholdM
+                                autoStartWifi = settings.autoStartOnWifiDisconnect
+                                autoStopWifi = settings.autoStopOnWifiConnect
+                                stopZones = settings.stopZones
+                                WifiAutoBeacon.ensureListening(this@MainActivity)
+                                true
+                            },
                             onBack = { screen = "main" },
                         )
                         else -> MainScreen(
