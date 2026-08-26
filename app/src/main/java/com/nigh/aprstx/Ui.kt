@@ -80,6 +80,7 @@ fun MainScreen(
     maxIntervalSec: Int,
     smartMove: Boolean,
     moveThresholdM: Int,
+    hasStopZones: Boolean,
     onCallsign: (String) -> Unit,
     onPasscode: (String) -> Unit,
     onComment: (String) -> Unit,
@@ -90,6 +91,7 @@ fun MainScreen(
     onStopSchedule: () -> Unit,
     onOpenLogs: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenZoneMap: () -> Unit,
 ) {
     var passcodeFocused by remember { mutableStateOf(false) }
 
@@ -222,12 +224,13 @@ fun MainScreen(
             Spacer(Modifier.height(56.dp))
         }
 
-        OutlinedButton(
-            onClick = onOpenSettings,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-        ) { Text("Settings") }
+        Row(
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (hasStopZones) OutlinedButton(onClick = onOpenZoneMap) { Text("Zone map") }
+            OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
+        }
     }
 }
 
@@ -546,6 +549,17 @@ fun SettingsScreen(
                         colors = settingsSwitchColors(),
                     )
                 }
+                OutlinedTextField(
+                    value = zone.note,
+                    onValueChange = { note ->
+                        onStopZonesChange(stopZones.toMutableList().also {
+                            it[index] = zone.copy(note = StopZone.clampNote(note))
+                        })
+                    },
+                    label = { Text("Note (optional, 64 characters)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
