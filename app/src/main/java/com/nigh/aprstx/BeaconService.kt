@@ -58,6 +58,7 @@ class BeaconService : Service() {
         BeaconRuntime.setInterval(interval)
         BeaconRuntime.setActive(true)
         BeaconRuntime.setCountdown(interval)
+        BeaconRuntime.beginGeoSession()
 
         val notif = buildNotification(interval, interval, settings)
         ServiceCompat.startForeground(
@@ -174,6 +175,7 @@ class BeaconService : Service() {
                             geoArm,
                         )
                         geoArm = step.arm
+                        BeaconRuntime.recordGeoEvent(step.event, step.eventZoneIds)
                         if (step.stop) {
                             AppGraph.logs.add(
                                 "Entered stop zone — auto-stopping schedule",

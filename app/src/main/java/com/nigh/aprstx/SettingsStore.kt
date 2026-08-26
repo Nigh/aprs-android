@@ -28,7 +28,9 @@ fun encodeSettingsBackup(b: SettingsBackup): String {
                 .put("lat", z.latitude)
                 .put("lon", z.longitude)
                 .put("radiusM", StopZone.clampRadius(z.radiusM))
-                .put("enabled", z.enabled),
+                .put("enabled", z.enabled)
+                .put("id", z.id)
+                .put("note", StopZone.clampNote(z.note)),
         )
     }
     return JSONObject()
@@ -60,6 +62,8 @@ fun decodeSettingsBackup(raw: String): SettingsBackup? = runCatching {
                     longitude = z.getDouble("lon"),
                     radiusM = StopZone.clampRadius(z.optInt("radiusM", StopZone.DEFAULT_RADIUS_M)),
                     enabled = z.optBoolean("enabled", true),
+                    id = z.optString("id").takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString(),
+                    note = StopZone.clampNote(z.optString("note", "")),
                 ),
             )
         }
@@ -180,6 +184,8 @@ class SettingsStore(context: Context) {
                                 longitude = o.getDouble("lon"),
                                 radiusM = StopZone.clampRadius(o.optInt("radiusM", StopZone.DEFAULT_RADIUS_M)),
                                 enabled = o.optBoolean("enabled", true),
+                                id = o.optString("id").takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString(),
+                                note = StopZone.clampNote(o.optString("note", "")),
                             ),
                         )
                     }
@@ -194,7 +200,9 @@ class SettingsStore(context: Context) {
                         .put("lat", z.latitude)
                         .put("lon", z.longitude)
                         .put("radiusM", StopZone.clampRadius(z.radiusM))
-                        .put("enabled", z.enabled),
+                        .put("enabled", z.enabled)
+                .put("id", z.id)
+                .put("note", StopZone.clampNote(z.note)),
                 )
             }
             prefs.edit().putString("stopZones", arr.toString()).apply()

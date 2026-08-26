@@ -72,6 +72,7 @@ object Transmitter {
                 settings.lastTxAtMs = System.currentTimeMillis()
                 settings.lastTxLat = loc.latitude
                 settings.lastTxLon = loc.longitude
+                BeaconRuntime.recordSuccessfulTx(loc)
             }
             return result
         } finally {

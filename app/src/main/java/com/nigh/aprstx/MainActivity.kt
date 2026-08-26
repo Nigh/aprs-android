@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
             val location by BeaconRuntime.lastLocation.collectAsState()
             val logList by logs.logs.collectAsState()
             val toast by BeaconRuntime.toast.collectAsState()
+            val zoneVisuals by BeaconRuntime.zoneVisuals.collectAsState()
+            val txTrack by BeaconRuntime.txTrack.collectAsState()
 
             val pollInterval by BeaconRuntime.intervalSec.collectAsState()
 
@@ -84,6 +86,13 @@ class MainActivity : ComponentActivity() {
                             logs = logList,
                             onBack = { screen = "main" },
                             onClear = { logs.clear() },
+                        )
+                        "zoneMap" -> ZoneMapScreen(
+                            zones = stopZones,
+                            eventStates = zoneVisuals,
+                            initialLocation = location,
+                            txTrack = txTrack,
+                            onBack = { screen = "main" },
                         )
                         "settings" -> SettingsScreen(
                             autoStartOnWifiDisconnect = autoStartWifi,
@@ -181,6 +190,7 @@ class MainActivity : ComponentActivity() {
                             maxIntervalSec = maxInterval,
                             smartMove = smartMove,
                             moveThresholdM = moveThreshold,
+                            hasStopZones = stopZones.isNotEmpty(),
                             onCallsign = {
                                 callsign = it
                                 settings.callsign = it
@@ -257,6 +267,7 @@ class MainActivity : ComponentActivity() {
                             onStopSchedule = { BeaconService.stop(this@MainActivity) },
                             onOpenLogs = { screen = "logs" },
                             onOpenSettings = { screen = "settings" },
+                            onOpenZoneMap = { screen = "zoneMap" },
                         )
                     }
                 }

@@ -7,6 +7,43 @@ import org.junit.Test
 
 class AprsTest {
     @Test
+    fun scheduledSessionClearsSuccessfulTxTrack() {
+        BeaconRuntime.beginGeoSession()
+        val first = AprsLocation(1.0, 2.0)
+        val second = AprsLocation(3.0, 4.0)
+        BeaconRuntime.recordSuccessfulTx(first)
+        BeaconRuntime.recordSuccessfulTx(second)
+        assertEquals(listOf(first, second), BeaconRuntime.txTrack.value)
+        BeaconRuntime.beginGeoSession()
+        assertTrue(BeaconRuntime.txTrack.value.isEmpty())
+    }
+
+    @Test
+    fun stopZoneNotesAndIdsRoundTrip() {
+        val longNote = "😀".repeat(70)
+        val zone = StopZone(22.5, 114.0, note = longNote)
+        assertEquals(64, StopZone.clampNote(longNote).codePointCount(0, StopZone.clampNote(longNote).length))
+        val decoded = decodeSettingsBackup(encodeSettingsBackup(SettingsBackup(stopZones = listOf(zone))))!!
+        assertEquals(zone.id, decoded.stopZones.single().id)
+        assertEquals(StopZone.clampNote(longNote), decoded.stopZones.single().note)
+        val legacy = decodeSettingsBackup("""{"stopZones":[{"lat":1,"lon":2}]}""")!!
+        assertTrue(legacy.stopZones.single().id.isNotBlank())
+        assertEquals("", legacy.stopZones.single().note)
+    }
+
+    @Test
+    fun geoAutoStopReportsVisualEvents() {
+        val zone = StopZone(0.0, 0.0, radiusM = 100)
+        val pending = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.UNKNOWN)
+        assertEquals(GeoZoneEvent.NEED_CLEAR, pending.event)
+        assertEquals(setOf(zone.id), pending.eventZoneIds)
+        val armed = geoAutoStopStep(0.002, 0.0, listOf(zone), GeoArm.UNKNOWN)
+        assertEquals(GeoZoneEvent.ARMED, armed.event)
+        val stopped = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.ARMED)
+        assertEquals(GeoZoneEvent.STOPPED, stopped.event)
+    }
+
+    @Test
     fun formatsLatitudeLongitude() {
         assertEquals("4903.50N", Aprs.formatLatitude(49.058333))
         assertEquals("07201.75W", Aprs.formatLongitude(-72.029166))
