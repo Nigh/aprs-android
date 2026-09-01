@@ -40,7 +40,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `GeoAutoStop.kt` | 停发地点（最多 16，每区 enabled + 半径 50–5000m + 备注（最多 64 Unicode 字符））；`geoAutoStopStep` 状态机 |
 | `SmartBeacon.kt` | 最小/最大间隔与位移 TX 判定（`shouldBeaconTx`）；任意两次发包 ≥30s |
 | `GpsPowerSave.kt` | 连续 GPS 超时退避（3 次 +30s，上限 300s；成功恢复 min；min≥300 不干预）；`BeaconService` 轮询间隔 |
-| `Transmitter.kt` | GPS+发包共享逻辑；成功 TX 记 lastTx；全局 30s cooldown |
+| `Transmitter.kt` | GPS+发包共享逻辑；所有发送在定位后统一检查 Stop zone，区内取消并提示；成功 TX 记 lastTx；全局 30s cooldown |
 | `MainActivity.kt` / `Ui.kt` / `ZoneMap.kt` | 主界面（passcode 编辑聚焦时明文、失焦时遮罩，Send once / Start scheduled TX；Settings 右下角）+ Settings（高对比度统一 Switch 配色、min/max interval、位移 TX、Automatic power saving、WiFi、Stop zones〔备注、Add 成功后清空经纬度输入〕/ Zone map、JSON 导入/导出、紧凑底栏 GitHub / made by BA7NTM）+ Logs；Settings/Logs 的系统返回键或手势回主界面；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
 | `SettingsStore.kt` | SharedPreferences；`SettingsBackup` JSON 编解码（不含 lastTx/位置） |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
@@ -61,7 +61,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - TX 前后 `PARTIAL_WAKE_LOCK` ≤60s，间隔内仅 `delay` 倒计时。
 - 通知 channel：`IMPORTANCE_LOW` + silent。
 - WiFi 自动启停：`Settings` 两项（断连后等一个 min interval 再 start）；监听开始时已有 WiFi 则 auto-stop 初始未武装，需完全断连并连续保持 100s 才武装，100s 内重连会取消且下次断连从 0 计时，武装后连上才 stop；`ConnectivityManager` NetworkCallback，进程被杀则失效。
-- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径 50–5000m + 64 字符备注）；Beacon 每次 GPS 轮次判定；启动时已在启用区内则需离开全部区外并越过迟滞距离再武装（半径 ≤1000m 时 +50m，>1000m 时 +100m）；进入启用区则本轮不发包并 stop。Zone map 是本地深色、以固定 Web Mercator 世界坐标锚定、随地理坐标平移/旋转且会按缩放细分的网格平面图（双指缩放/旋转、指北针点按复北、带文字比例尺、当前位置呼吸光环、视图外 20km 内全部 Zone 的边缘方向/距离提示（20km 内无 Zone 则提示最近一个；标签沿四边分组避碰，名称/编号与距离分两行，带引导线、背景和边框且限制在屏内））：进入时仅接受 5min 内最近位置，否则显示定位中提示；首次定位失败弹 Retry/Exit 对话框；默认自身中心、屏幕长边 10km 半径且可按钮复位；手势监听不以 viewport 为 key，避免连续拖动/缩放被重启；仅前台每 5s 单次定位、不会改变发包循环状态；成功 TX 留点并连线，开启新 scheduled session 才清除；事件色由 scheduled TX 地理判定写入（黄待离开、绿已武装、红进入并停止，红保留到下一次 scheduled session 首次判定）。
+- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径 50–5000m + 64 字符备注）；任何发送（单次或 scheduled）定位处于启用区内均取消，单次发送弹出带区名/编号的提示；Beacon 每次 GPS 轮次判定；启动时已在启用区内不发包，需离开全部区外并越过迟滞距离再武装（半径 ≤1000m 时 +50m，>1000m 时 +100m）；武装后进入启用区则本轮不发包并 stop。Zone map 是本地深色、以固定 Web Mercator 世界坐标锚定、随地理坐标平移/旋转且会按缩放细分的网格平面图（双指缩放/旋转、指北针点按复北、带文字比例尺、当前位置呼吸光环、视图外 20km 内全部 Zone 的边缘方向/距离提示（20km 内无 Zone 则提示最近一个；标签沿四边分组避碰，名称/编号与距离分两行，带引导线、背景和边框且限制在屏内））：进入时仅接受 5min 内最近位置，否则显示定位中提示；首次定位失败弹 Retry/Exit 对话框；默认自身中心、屏幕长边 10km 半径且可按钮复位；手势监听不以 viewport 为 key，避免连续拖动/缩放被重启；仅前台每 5s 单次定位、不会改变发包循环状态；成功 TX 留点并连线，开启新 scheduled session 才清除；事件色由 scheduled TX 地理判定写入（黄待离开、绿已武装、红进入并停止，红保留到下一次 scheduled session 首次判定）。
 
 ## 自检
 

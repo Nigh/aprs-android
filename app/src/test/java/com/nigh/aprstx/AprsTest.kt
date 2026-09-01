@@ -36,11 +36,13 @@ class AprsTest {
         val zone = StopZone(0.0, 0.0, radiusM = 100)
         val pending = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.UNKNOWN)
         assertEquals(GeoZoneEvent.NEED_CLEAR, pending.event)
+        assertTrue(pending.txBlocked)
         assertEquals(setOf(zone.id), pending.eventZoneIds)
         val armed = geoAutoStopStep(0.002, 0.0, listOf(zone), GeoArm.UNKNOWN)
         assertEquals(GeoZoneEvent.ARMED, armed.event)
         val stopped = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.ARMED)
         assertEquals(GeoZoneEvent.STOPPED, stopped.event)
+        assertTrue(stopped.txBlocked)
     }
 
     @Test
@@ -212,10 +214,12 @@ class AprsTest {
         val startInside = geoAutoStopStep(0.0, 0.0, listOf(zone), GeoArm.UNKNOWN)
         assertEquals(GeoArm.NEED_CLEAR, startInside.arm)
         assertFalse(startInside.stop)
+        assertTrue(startInside.txBlocked)
 
         val stillNear = geoAutoStopStep(nearClear, 0.0, listOf(zone), GeoArm.NEED_CLEAR)
         assertEquals(GeoArm.NEED_CLEAR, stillNear.arm)
         assertFalse(stillNear.stop)
+        assertFalse(stillNear.txBlocked)
 
         val armed = geoAutoStopStep(cleared, 0.0, listOf(zone), GeoArm.NEED_CLEAR)
         assertEquals(GeoArm.ARMED, armed.arm)
@@ -262,6 +266,14 @@ class AprsTest {
         val empty = geoAutoStopStep(0.0, 0.0, emptyList(), GeoArm.NEED_CLEAR)
         assertEquals(GeoArm.NEED_CLEAR, empty.arm)
         assertFalse(empty.stop)
+    }
+
+    @Test
+    fun containingStopZonesOnlyReturnsEnabledZonesContainingLocation() {
+        val inside = StopZone(0.0, 0.0, radiusM = 100, note = "Home")
+        val disabled = StopZone(0.0, 0.0, radiusM = 100, enabled = false)
+        val outside = StopZone(1.0, 1.0, radiusM = 100)
+        assertEquals(listOf(inside), containingStopZones(0.0, 0.0, listOf(inside, disabled, outside)))
     }
 
     @Test

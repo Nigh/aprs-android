@@ -36,28 +36,37 @@ enum class GeoZoneEvent { NEED_CLEAR, ARMED, STOPPED }
 data class GeoAutoStopResult(
     val arm: GeoArm,
     val stop: Boolean,
+    val txBlocked: Boolean = false,
     val event: GeoZoneEvent? = null,
     val eventZoneIds: Set<String> = emptySet(),
 )
+
+fun containingStopZones(latitude: Double, longitude: Double, zones: List<StopZone>): List<StopZone> =
+    zones.filter {
+        it.enabled && Aprs.haversineMeters(latitude, longitude, it.latitude, it.longitude) <= it.radiusM
+    }
 
 /** Pure geo auto-stop step (unit-tested). Only enabled zones count. */
 fun geoAutoStopStep(latitude: Double, longitude: Double, zones: List<StopZone>, arm: GeoArm): GeoAutoStopResult {
     val active = zones.filter { it.enabled }
     if (active.isEmpty()) return GeoAutoStopResult(arm, stop = false)
     fun dist(z: StopZone) = Aprs.haversineMeters(latitude, longitude, z.latitude, z.longitude)
-    fun insideZones() = active.filter { dist(it) <= it.radiusM }
+    fun insideZones() = containingStopZones(latitude, longitude, active)
     fun clearedAll() = active.all { dist(it) > it.radiusM + StopZone.clearExtraM(it.radiusM) }
     return when (arm) {
         GeoArm.UNKNOWN -> {
             val inside = insideZones()
-            if (inside.isNotEmpty()) GeoAutoStopResult(GeoArm.NEED_CLEAR, false, GeoZoneEvent.NEED_CLEAR, inside.map { it.id }.toSet())
-            else GeoAutoStopResult(GeoArm.ARMED, false, GeoZoneEvent.ARMED, active.map { it.id }.toSet())
+            if (inside.isNotEmpty()) GeoAutoStopResult(GeoArm.NEED_CLEAR, false, true, GeoZoneEvent.NEED_CLEAR, inside.map { it.id }.toSet())
+            else GeoAutoStopResult(GeoArm.ARMED, false, false, GeoZoneEvent.ARMED, active.map { it.id }.toSet())
         }
-        GeoArm.NEED_CLEAR -> if (clearedAll()) GeoAutoStopResult(GeoArm.ARMED, false, GeoZoneEvent.ARMED, active.map { it.id }.toSet())
-        else GeoAutoStopResult(GeoArm.NEED_CLEAR, stop = false)
+        GeoArm.NEED_CLEAR -> {
+            val inside = insideZones()
+            if (clearedAll()) GeoAutoStopResult(GeoArm.ARMED, false, false, GeoZoneEvent.ARMED, active.map { it.id }.toSet())
+            else GeoAutoStopResult(GeoArm.NEED_CLEAR, stop = false, txBlocked = inside.isNotEmpty())
+        }
         GeoArm.ARMED -> {
             val inside = insideZones()
-            if (inside.isNotEmpty()) GeoAutoStopResult(GeoArm.ARMED, true, GeoZoneEvent.STOPPED, inside.map { it.id }.toSet())
+            if (inside.isNotEmpty()) GeoAutoStopResult(GeoArm.ARMED, true, true, GeoZoneEvent.STOPPED, inside.map { it.id }.toSet())
             else GeoAutoStopResult(GeoArm.ARMED, stop = false)
         }
     }
