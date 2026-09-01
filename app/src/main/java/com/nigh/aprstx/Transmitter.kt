@@ -48,6 +48,17 @@ object Transmitter {
                 return TransmitResult(false, msg)
             }
 
+            val containingZones = containingStopZones(loc.latitude, loc.longitude, settings.stopZones)
+            if (containingZones.isNotEmpty()) {
+                val labels = containingZones.joinToString { zone ->
+                    zone.note.trim().ifBlank { "Stop zone ${settings.stopZones.indexOf(zone) + 1}" }
+                }
+                val msg = "Transmission cancelled: current location is inside $labels"
+                logs.add(msg, LogType.WARNING)
+                BeaconRuntime.emitToast(msg, LogType.WARNING)
+                return TransmitResult(false, msg)
+            }
+
             val packets = Aprs.generatePackets(
                 callsign = settings.callsign,
                 latitude = loc.latitude,

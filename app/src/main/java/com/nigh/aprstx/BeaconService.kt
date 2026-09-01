@@ -188,6 +188,9 @@ class BeaconService : Service() {
                             stoppedByGeo = true
                             return@withBriefWake
                         }
+                        if (step.txBlocked) {
+                            return@withBriefWake
+                        }
                         val decision = shouldBeaconTx(
                             nowMs = System.currentTimeMillis(),
                             lastTxAtMs = settings.lastTxAtMs,
