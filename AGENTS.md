@@ -47,7 +47,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `res/mipmap-anydpi/ic_launcher*.xml` | 自适应 launcher icon（新版透明 APRS 图稿保持比例居中缩至 60% 安全区；主色 #26252f bg 全幅 → `drawable/ic_launcher_{foreground,background}.png`） |
 | `docs/icon.png` | README 顶部预览（由当前 adaptive icon 的新版 fg/bg 合成） |
 | `build.sh` / `build.ps1` | Linux/WSL Docker 与 Windows WSLC 编译、测试、安装；两者接口保持同步 |
-| `README.md` | 用户功能与 Linux/WSL、Windows WSLC 构建说明 |
+| `README.md` | 用户功能（Features 含 Stop zones 简述）与 Linux/WSL、Windows WSLC 构建说明 |
 
 ## 后台与省电（约定）
 
