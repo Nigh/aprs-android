@@ -1,6 +1,7 @@
 package com.nigh.aprstx
 
 import android.graphics.Paint
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -39,15 +40,26 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
+import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.Style
 import kotlin.math.abs
 import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.ln
+import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -58,8 +70,70 @@ private const val MAP_GPS_POLL_MS = 5_000L
 private const val INITIAL_LOCATION_MAX_AGE_MS = 5 * 60_000L
 private const val DEFAULT_RADIUS_M = 10_000.0
 private const val OFFSCREEN_ZONE_RANGE_M = 20_000.0
+private const val DARK_MAP_STYLE = "https://tiles.openfreemap.org/styles/dark"
+private const val MAPLIBRE_TILE_SIZE_PX = 512.0
+
+internal fun mapLibreBearing(canvasBearingDeg: Float): Double = -canvasBearingDeg.toDouble()
 
 private data class MapViewport(val lat: Double, val lon: Double, val metersPerPx: Double, val bearingDeg: Float = 0f)
+
+@Composable
+private fun DarkOsmMap(viewport: MapViewport?) {
+    val context = LocalContext.current
+    val density = LocalDensity.current.density
+    var mapView by remember { mutableStateOf<MapView?>(null) }
+    var mapReady by remember { mutableStateOf<MapLibreMap?>(null) }
+
+    AndroidView(
+        factory = {
+            MapLibre.getInstance(context)
+            MapView(context).also { view ->
+                mapView = view
+                view.onCreate(null)
+                view.onStart()
+                view.onResume()
+                view.getMapAsync { map ->
+                    map.uiSettings.setAllGesturesEnabled(false)
+                    map.uiSettings.isCompassEnabled = false
+                    map.uiSettings.isLogoEnabled = false
+                    map.uiSettings.isAttributionEnabled = false
+                    map.setStyle(Style.Builder().fromUri(DARK_MAP_STYLE))
+                    mapReady = map
+                }
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    )
+
+    LaunchedEffect(viewport, mapReady, density) {
+        val v = viewport ?: return@LaunchedEffect
+        val map = mapReady ?: return@LaunchedEffect
+        val groundMetersPerDp = v.metersPerPx * density
+        val zoom = log2(
+            cos(Math.toRadians(v.lat)).coerceAtLeast(0.1) *
+                (2 * Math.PI * EARTH_RADIUS_M) / (MAPLIBRE_TILE_SIZE_PX * groundMetersPerDp),
+        ).coerceIn(0.0, 20.0)
+        map.moveCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(v.lat, v.lon))
+                    .zoom(zoom)
+                    .bearing(mapLibreBearing(v.bearingDeg))
+                    .build(),
+            ),
+        )
+    }
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            mapView?.onPause()
+            mapView?.onStop()
+            mapView?.onDestroy()
+            mapView = null
+            mapReady = null
+        }
+    }
+}
 
 @Composable
 fun ZoneMapScreen(
@@ -115,6 +189,7 @@ fun ZoneMapScreen(
     }
 
     Box(Modifier.fillMaxSize().background(Color(0xff11151b))) {
+        DarkOsmMap(viewport)
         Canvas(
             Modifier.fillMaxSize()
                 .onSizeChanged { mapSize = it }
@@ -186,6 +261,15 @@ fun ZoneMapScreen(
             modifier = Modifier.align(Alignment.TopStart),
         ) { Text("Me · 10 km") }
         TextButton(onClick = onBack, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)) { Text("Back") }
+        Text(
+            "© OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors",
+            color = Color.White.copy(alpha = 0.8f),
+            fontSize = 9.sp,
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.55f))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
         if (viewport == null && gpsError == null) {
             Text("Acquiring GPS location…", color = Color.White, modifier = Modifier.align(Alignment.Center))
         }

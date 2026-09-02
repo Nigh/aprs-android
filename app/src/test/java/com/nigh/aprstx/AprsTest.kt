@@ -7,6 +7,12 @@ import org.junit.Test
 
 class AprsTest {
     @Test
+    fun mapLibreBearingUsesOppositeRotationConvention() {
+        assertEquals(-45.0, mapLibreBearing(45f), 0.0)
+        assertEquals(90.0, mapLibreBearing(-90f), 0.0)
+    }
+
+    @Test
     fun scheduledSessionClearsSuccessfulTxTrack() {
         BeaconRuntime.beginGeoSession()
         val first = AprsLocation(1.0, 2.0)
