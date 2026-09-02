@@ -27,6 +27,7 @@ Each TX is a short-lived session: connect → `user … pass … vers APRS-TX 1.
 - Callsign / passcode validation, comment + status fields
 - Settings + operation logs persisted locally; Settings JSON export/import for reinstall
 - Auto power-save: back off GPS poll after repeated timeouts indoors
+- Stop zones: configure up to 16 enabled zones with radius and notes; APRS TX is blocked while inside, and the Zone map shows them on a dark OpenStreetMap-based basemap
 
 ## Power / background design
 
@@ -81,8 +82,3 @@ Override image: `$env:ANDROID_DEV_IMAGE = "android-dev"; .\build.ps1 build`
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE).
-
-
-## Stop zones
-
-Each stop zone supports an optional 64-character note. When zones exist, **Zone map** on the main screen opens an OpenStreetMap-based OpenFreeMap Dark vector basemap, with a local Web Mercator-anchored, zoom-refined grid fallback with pan/zoom/rotation, resettable compass, labelled scale, pulsing current-location marker, collision-avoiding, bordered two-line edge callouts for every off-screen zone within 20 km, falling back to the nearest zone, and scheduled-TX stop-zone state colors. It starts from a location no older than five minutes at a 10 km radius along the screen's long edge, otherwise shows GPS acquisition progress and offers Retry/Exit if acquisition fails; successful TX points form a trail that clears when a new scheduled session starts.
