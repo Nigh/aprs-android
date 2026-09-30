@@ -168,6 +168,7 @@ class BeaconService : Service() {
                         }
                     }
                     if (loc != null) {
+                        Webhook.report(this@BeaconService, settings, AppGraph.logs, loc)
                         val step = geoAutoStopStep(
                             loc.latitude,
                             loc.longitude,
@@ -212,14 +213,10 @@ class BeaconService : Service() {
                             AppGraph.logs,
                             "scheduled transmission",
                             location = loc,
+                            reportWebhook = false,
                         )
                     } else {
-                        Transmitter.transmitOnce(
-                            this@BeaconService,
-                            AppGraph.settings,
-                            AppGraph.logs,
-                            "scheduled transmission",
-                        )
+                        AppGraph.logs.add("GPS acquisition failed: no location for scheduled transmission", LogType.ERROR)
                     }
                 }
                 if (stoppedByGeo) {

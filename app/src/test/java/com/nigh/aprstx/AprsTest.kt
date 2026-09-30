@@ -330,6 +330,9 @@ class AprsTest {
             autoStartOnWifiDisconnect = true,
             autoStopOnWifiConnect = false,
             autoPowerSaveEnabled = false,
+            webhookEnabled = true,
+            webhookUrl = "https://example.com/location",
+            webhookId = "BA7NTM",
             stopZones = listOf(
                 StopZone(22.5, 114.0, 150, enabled = true),
                 StopZone(-1.0, 2.0, 50, enabled = false),
@@ -341,6 +344,9 @@ class AprsTest {
         // legacy JSON without autoPowerSaveEnabled → default on
         val legacy = decodeSettingsBackup("""{"v":1,"callsign":"N0CALL"}""")
         assertEquals(true, legacy?.autoPowerSaveEnabled)
+        assertEquals(false, legacy?.webhookEnabled)
+        assertEquals("", legacy?.webhookUrl)
+        assertEquals("", legacy?.webhookId)
     }
 
     @Test

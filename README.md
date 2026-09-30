@@ -27,7 +27,75 @@ Each TX is a short-lived session: connect → `user … pass … vers APRS-TX 1.
 - Callsign / passcode validation, comment + status fields
 - Settings + operation logs persisted locally; Settings JSON export/import for reinstall
 - Auto power-save: back off GPS poll after repeated timeouts indoors
+- Optional HTTPS webhook: report each manual attempt / scheduled GPS cycle, including positions where APRS TX is blocked
 - Stop zones: configure up to 16 enabled zones with radius and notes; APRS TX is blocked while inside, and the Zone map shows them on a dark OpenStreetMap-based basemap
+
+## Webhook
+
+In **Settings**, enable the switch to reveal the configuration fields, then
+enter your backend's **Webhook HTTPS URL** and a non-empty **Webhook reporting ID**. Settings are saved automatically and
+included in JSON export/import; older backups default to webhook disabled. The reporting
+ID is your own user identifier, independent of the APRS callsign. Both fields are trimmed
+before use. The URL must use HTTPS with a valid certificate, without URL userinfo or a
+fragment. A query token can be used if your backend requires authentication; exported
+settings also contain this URL, so keep those backups private.
+
+Each **Send once** attempt and each scheduled GPS cycle sends one JSON POST when a
+reliable location is available, **before** APRS cooldown, callsign validation, Stop zone,
+or displacement/min/max interval checks. A cycle that enters a Stop zone reports its
+position before stopping the schedule. A position packet and its optional APRS status
+packet share one webhook report. Merely fetching GPS or viewing the map does not report;
+a stopped schedule does not continue reporting.
+
+Here, a reliable location means finite, in-range WGS84 coordinates with a fix age of
+**0–60 seconds**. Old fallback fixes retain their original age and are not reported.
+Horizontal accuracy is included when available, with no additional accuracy cutoff.
+No reliable fix means no POST. Missing optional measurements are JSON `null`, not empty
+strings; zero is a valid measurement. Speed can be supplied by GPS or estimated from two
+recent fixes, as in the APRS path. Bearing is supplied by the location provider only.
+
+Example request (`Content-Type: application/json; charset=utf-8`):
+
+```json
+{
+  "id": "BA7NTM",
+  "device_hash": "7e58cfa934b1d62e0a47f8039c6bd125a0d93f4e62b87c15d940eab7316c208f",
+  "timestamp_ms": 1790726400000,
+  "latitude": 22.5431,
+  "longitude": 114.0579,
+  "accuracy_m": 8.0,
+  "speed_mps": 1.4,
+  "bearing_deg": 90.0,
+  "altitude_m": null
+}
+```
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `id` | string | Required user-configured reporting ID |
+| `device_hash` | string | Required lowercase SHA-256 hex digest (64 characters) |
+| `timestamp_ms` | integer | Fix time, Unix epoch milliseconds (not POST time) |
+| `latitude` | number | Required WGS84 latitude, −90 to +90 degrees |
+| `longitude` | number | Required WGS84 longitude, −180 to +180 degrees |
+| `accuracy_m` | number or null | Horizontal accuracy radius in meters |
+| `speed_mps` | number or null | Speed in meters per second |
+| `bearing_deg` | number or null | Direction of travel clockwise from true north, [0, 360) degrees |
+| `altitude_m` | number or null | [Altitude above the WGS84 ellipsoid](https://developer.android.com/reference/android/location/Location#getAltitude()) in meters; may be negative |
+
+The hash is SHA-256 of `packageName|ANDROID_ID|manufacturer|model` encoded as UTF-8.
+Raw device identifiers are not sent. Android scopes [`ANDROID_ID`](https://developer.android.com/reference/android/provider/Settings.Secure#ANDROID_ID) to device, Android user,
+and app signing key; a factory reset or signing-key change can change it. If Android
+provides no ID, a locally persisted random UUID replaces it. Device identity is not part
+of the app's settings JSON, so importing the same settings onto another device does not
+copy its hash. Use `(id, device_hash)` to distinguish a user's devices; the hash is an
+identifier, **not authentication**.
+
+The backend should accept JSON POST and promptly return any **2xx** status (for example,
+`204 No Content`). Response bodies are ignored. Redirects are not followed. Each report
+is attempted once, with 5-second connect/read timeouts; there is no retry queue or offline
+replay. Webhook completes before APRS rule evaluation, so a slow endpoint can delay that
+attempt. HTTP errors and network failures appear in Logs and do not suppress APRS TX or
+change its cooldown/track. No APRS passcode or raw APRS packet is sent to the webhook.
 
 ## Power / background design
 

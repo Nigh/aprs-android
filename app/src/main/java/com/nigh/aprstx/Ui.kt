@@ -239,6 +239,12 @@ fun SettingsScreen(
     autoStartOnWifiDisconnect: Boolean,
     autoStopOnWifiConnect: Boolean,
     autoPowerSave: Boolean,
+    webhookEnabled: Boolean,
+    webhookUrl: String,
+    webhookId: String,
+    onWebhookEnabled: (Boolean) -> Unit,
+    onWebhookUrl: (String) -> Unit,
+    onWebhookId: (String) -> Unit,
     minIntervalSec: Int,
     maxIntervalSec: Int,
     smartMove: Boolean,
@@ -459,6 +465,28 @@ fun SettingsScreen(
                 )
             }
 
+            HorizontalDivider()
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Enable webhook", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Switch(checked = webhookEnabled, onCheckedChange = onWebhookEnabled, colors = settingsSwitchColors())
+            }
+            if (webhookEnabled) {
+                OutlinedTextField(
+                    value = webhookUrl, onValueChange = onWebhookUrl,
+                    label = { Text("Webhook HTTPS URL") },
+                    isError = !Webhook.validUrl(webhookUrl.trim()),
+                    supportingText = { Text("Enter a valid HTTPS URL without userinfo or a fragment") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                )
+                OutlinedTextField(
+                    value = webhookId, onValueChange = onWebhookId,
+                    label = { Text("Webhook reporting ID") }, isError = webhookId.isBlank(),
+                    supportingText = { Text("Required: identifies you on your webhook server") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                )
+            }
             HorizontalDivider()
 
             Text(

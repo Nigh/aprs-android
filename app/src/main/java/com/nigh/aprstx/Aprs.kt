@@ -13,6 +13,7 @@ data class AprsLocation(
     val altitude: Double? = null,
     val speedMps: Float? = null,
     val timestampMs: Long = System.currentTimeMillis(),
+    val bearingDeg: Float? = null,
 )
 
 data class ValidationResult(val valid: Boolean, val message: String? = null)

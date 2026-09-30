@@ -17,6 +17,9 @@ data class SettingsBackup(
     val autoStartOnWifiDisconnect: Boolean = false,
     val autoStopOnWifiConnect: Boolean = false,
     val autoPowerSaveEnabled: Boolean = true,
+    val webhookEnabled: Boolean = false,
+    val webhookUrl: String = "",
+    val webhookId: String = "",
     val stopZones: List<StopZone> = emptyList(),
 )
 
@@ -46,6 +49,9 @@ fun encodeSettingsBackup(b: SettingsBackup): String {
         .put("autoStartOnWifiDisconnect", b.autoStartOnWifiDisconnect)
         .put("autoStopOnWifiConnect", b.autoStopOnWifiConnect)
         .put("autoPowerSaveEnabled", b.autoPowerSaveEnabled)
+        .put("webhookEnabled", b.webhookEnabled)
+        .put("webhookUrl", b.webhookUrl)
+        .put("webhookId", b.webhookId)
         .put("stopZones", zones)
         .toString()
 }
@@ -80,6 +86,9 @@ fun decodeSettingsBackup(raw: String): SettingsBackup? = runCatching {
         autoStartOnWifiDisconnect = o.optBoolean("autoStartOnWifiDisconnect", false),
         autoStopOnWifiConnect = o.optBoolean("autoStopOnWifiConnect", false),
         autoPowerSaveEnabled = o.optBoolean("autoPowerSaveEnabled", true),
+        webhookEnabled = o.optBoolean("webhookEnabled", false),
+        webhookUrl = o.optString("webhookUrl", ""),
+        webhookId = o.optString("webhookId", ""),
         stopZones = zones,
     )
 }.getOrNull()
@@ -170,6 +179,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("autoPowerSaveEnabled", true)
         set(v) = prefs.edit().putBoolean("autoPowerSaveEnabled", v).apply()
 
+    var webhookEnabled: Boolean
+        get() = prefs.getBoolean("webhookEnabled", false)
+        set(v) = prefs.edit().putBoolean("webhookEnabled", v).apply()
+
+    var webhookUrl: String
+        get() = prefs.getString("webhookUrl", "") ?: ""
+        set(v) = prefs.edit().putString("webhookUrl", v).apply()
+
+    var webhookId: String
+        get() = prefs.getString("webhookId", "") ?: ""
+        set(v) = prefs.edit().putString("webhookId", v).apply()
+
     var stopZones: List<StopZone>
         get() {
             val raw = prefs.getString("stopZones", null) ?: return emptyList()
@@ -216,13 +237,15 @@ class SettingsStore(context: Context) {
                 longitude = Double.fromBits(prefs.getLong("lon", 0L)),
                 accuracy = if (prefs.contains("acc")) prefs.getFloat("acc", 0f) else null,
                 speedMps = if (prefs.contains("spd")) prefs.getFloat("spd", 0f) else null,
+                altitude = if (prefs.contains("alt")) Double.fromBits(prefs.getLong("alt", 0L)) else null,
+                bearingDeg = if (prefs.contains("bearing")) prefs.getFloat("bearing", 0f) else null,
                 timestampMs = prefs.getLong("locTs", 0L),
             )
         }
         set(v) {
             if (v == null) {
                 prefs.edit()
-                    .remove("lat").remove("lon").remove("acc").remove("spd").remove("locTs")
+                    .remove("lat").remove("lon").remove("acc").remove("spd").remove("locTs").remove("alt").remove("bearing")
                     .apply()
                 return
             }
@@ -232,6 +255,8 @@ class SettingsStore(context: Context) {
                 .putLong("locTs", v.timestampMs)
             if (v.accuracy != null) e.putFloat("acc", v.accuracy) else e.remove("acc")
             if (v.speedMps != null) e.putFloat("spd", v.speedMps) else e.remove("spd")
+            if (v.altitude != null) e.putLong("alt", v.altitude.toRawBits()) else e.remove("alt")
+            if (v.bearingDeg != null) e.putFloat("bearing", v.bearingDeg) else e.remove("bearing")
             e.apply()
         }
 
@@ -247,6 +272,9 @@ class SettingsStore(context: Context) {
         autoStartOnWifiDisconnect = autoStartOnWifiDisconnect,
         autoStopOnWifiConnect = autoStopOnWifiConnect,
         autoPowerSaveEnabled = autoPowerSaveEnabled,
+        webhookEnabled = webhookEnabled,
+        webhookUrl = webhookUrl,
+        webhookId = webhookId,
         stopZones = stopZones,
     )
 
@@ -262,6 +290,9 @@ class SettingsStore(context: Context) {
         autoStartOnWifiDisconnect = b.autoStartOnWifiDisconnect
         autoStopOnWifiConnect = b.autoStopOnWifiConnect
         autoPowerSaveEnabled = b.autoPowerSaveEnabled
+        webhookEnabled = b.webhookEnabled
+        webhookUrl = b.webhookUrl
+        webhookId = b.webhookId
         stopZones = b.stopZones
     }
 
