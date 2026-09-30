@@ -1,5 +1,36 @@
 package com.nigh.aprstx
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.semantics.paneTitle
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.ListItem
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -36,6 +67,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
@@ -95,142 +128,180 @@ fun MainScreen(
 ) {
     var passcodeFocused by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(Modifier.widthIn(max = 640.dp).fillMaxSize().padding(horizontal = 16.dp)) {
             Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("APRS-TX", style = MaterialTheme.typography.headlineSmall)
+                Text("APRS-TX", style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f).semantics { heading() })
                 TextButton(onClick = onOpenLogs) { Text("Logs") }
+                TextButton(onClick = onOpenSettings) { Text("Settings") }
             }
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = callsign,
-                    onValueChange = onCallsign,
-                    label = { Text("Callsign *") },
-                    modifier = Modifier.weight(1f),
-                    enabled = !scheduling,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                )
-                OutlinedTextField(
-                    value = passcode,
-                    onValueChange = onPasscode,
-                    label = { Text("Passcode *") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .onFocusChanged { passcodeFocused = it.isFocused },
-                    enabled = !scheduling,
-                    singleLine = true,
-                    visualTransformation = if (passcodeFocused) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-            }
-
             HorizontalDivider()
-
-            OutlinedTextField(
-                value = comment,
-                onValueChange = onComment,
-                label = { Text("Comment (optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = status,
-                onValueChange = onStatus,
-                label = { Text("Status (optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-
-            if (location != null) {
-                val speedText = location.speedMps?.let { " • %.1f km/h".format(it * 3.6f) } ?: ""
-                val accText = location.accuracy?.let { "±%.1fm".format(it) } ?: "±N/A"
-                Text(
-                    text = "%.4f°, %.4f°\n%s%s".format(
-                        location.latitude,
-                        location.longitude,
-                        accText,
-                        speedText,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onGps,
-                    enabled = !busy && !scheduling,
-                    modifier = Modifier.weight(1f),
-                ) { Text(if (busy) "…" else "GPS") }
-                Button(
-                    onClick = onSend,
-                    enabled = !busy && !scheduling,
-                    modifier = Modifier.weight(2f),
-                ) { Text(if (busy) "…" else "Send once") }
-            }
-
-            if (!scheduling) {
-                Button(
-                    onClick = onStartSchedule,
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Start scheduled TX") }
-            } else {
-                val progress = if (pollIntervalSec > 0) {
-                    (1f - countdownSec.toFloat() / pollIntervalSec.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    0f
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Surface(shape = MaterialTheme.shapes.large) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Station", style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.semantics { heading() })
+                        if (scheduling) Text("Stop scheduled TX to edit your credentials.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = callsign, onValueChange = onCallsign,
+                                label = { Text("Callsign *") }, modifier = Modifier.weight(1f),
+                                enabled = !scheduling, singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                            )
+                            OutlinedTextField(
+                                value = passcode, onValueChange = onPasscode,
+                                label = { Text("Passcode *") },
+                                modifier = Modifier.weight(1f).onFocusChanged { passcodeFocused = it.isFocused },
+                                enabled = !scheduling, singleLine = true,
+                                visualTransformation = if (passcodeFocused) VisualTransformation.None else PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            )
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Text("Packet text", style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.semantics { heading() })
+                        OutlinedTextField(
+                            value = comment, onValueChange = onComment,
+                            label = { Text("Comment (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = status, onValueChange = onStatus,
+                            label = { Text("Status (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        )
+                    }
                 }
-                Box(Modifier.fillMaxWidth()) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                            .align(Alignment.Center),
-                    )
-                    FilledTonalButton(
-                        onClick = onStopSchedule,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Stop scheduled TX (${countdownSec}s)") }
+                Surface(shape = MaterialTheme.shapes.large) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Location", style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f).semantics { heading() })
+                            if (hasStopZones) TextButton(onClick = onOpenZoneMap) { Text("Zone map") }
+                        }
+                        if (location != null) {
+                            Text("%.4f°, %.4f°".format(location.latitude, location.longitude),
+                                style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            val accuracy = location.accuracy?.let { "Accuracy ±%.1f m".format(it) } ?: "Accuracy unavailable"
+                            val speed = location.speedMps?.let { " · %.1f km/h".format(it * 3.6f) } ?: ""
+                            Text(accuracy + speed, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Text("No location yet. Get a GPS fix or send to locate automatically.",
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        OutlinedButton(onClick = onGps, enabled = !busy && !scheduling,
+                            modifier = Modifier.fillMaxWidth()) { Text("Get GPS location") }
+                    }
                 }
-                Text(
-                    text = if (smartMove) {
-                        "GPS every ${minIntervalSec}s — TX if moved ≥${moveThresholdM}m, else every ${maxIntervalSec}s"
-                    } else {
-                        "TX every ${minIntervalSec}s — GPS at each TX (background OK)"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Surface(shape = MaterialTheme.shapes.large) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Transmission", style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f).semantics { heading() })
+                            Text(if (scheduling) "Running" else "Stopped", style = MaterialTheme.typography.labelLarge,
+                                color = if (scheduling) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            if (smartMove) "GPS every ${minIntervalSec}s · TX after ${moveThresholdM}m, or at ${maxIntervalSec}s"
+                            else "Scheduled TX every ${minIntervalSec}s",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (scheduling) {
+                            Text("Next location check in ${countdownSec}s", style = MaterialTheme.typography.bodyMedium)
+                            val progress = if (pollIntervalSec > 0) {
+                                (1f - countdownSec.toFloat() / pollIntervalSec.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                            FilledTonalButton(onClick = onStopSchedule, modifier = Modifier.fillMaxWidth()) {
+                                Text("Stop scheduled TX")
+                            }
+                        } else {
+                            if (busy) {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Text("Working…", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Button(onClick = onStartSchedule, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Text("Start scheduled TX")
+                            }
+                            OutlinedButton(onClick = onSend, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                Text("Send once")
+                            }
+                        }
+                    }
+                }
             }
-
-            // room for floating Settings button
-            Spacer(Modifier.height(56.dp))
         }
+    }
+}
 
-        Row(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (hasStopZones) OutlinedButton(onClick = onOpenZoneMap) { Text("Zone map") }
-            OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
+private enum class SettingsSection(val title: String, val description: String) {
+    TRANSMISSION("Transmission", "Choose when scheduled APRS packets are sent."),
+    AUTOMATION("Automation", "Control GPS power use and WiFi start / stop rules."),
+    WEBHOOK("Webhook", "Send location updates to your own HTTPS backend."),
+    ZONES("Stop zones", "Manage places where APRS transmission is blocked."),
+    BACKUP("Backup", "Export your configuration or restore it from a file."),
+}
+
+@Composable
+private fun NavigationArrow(back: Boolean = false) {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    Canvas(Modifier.size(24.dp)) {
+        val pointsLeft = back != rtl
+        fun point(x: Float, y: Float) = Offset(size.width * (if (pointsLeft) 1f - x else x), size.height * y)
+        val stroke = 2.dp.toPx()
+        drawLine(color, point(.4f, .25f), point(.65f, .5f), stroke, StrokeCap.Round)
+        drawLine(color, point(.65f, .5f), point(.4f, .75f), stroke, StrokeCap.Round)
+        if (back) drawLine(color, point(.2f, .5f), point(.65f, .5f), stroke, StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun SettingsEntry(section: SettingsSection, summary: String, onOpen: (SettingsSection) -> Unit) {
+    ListItem(
+        headlineContent = { Text(section.title, style = MaterialTheme.typography.titleMedium) },
+        supportingContent = { Text(summary, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        trailingContent = { NavigationArrow() },
+        modifier = Modifier.clickable(role = Role.Button, onClickLabel = "Open ${section.title}") { onOpen(section) },
+    )
+}
+
+@Composable
+private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp).semantics { heading() })
+        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
+            Column { content() }
         }
+    }
+}
+
+@Composable
+private fun SettingsToggle(title: String, description: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(description, style = MaterialTheme.typography.bodyMedium)
+        }
+        Switch(checked = checked, onCheckedChange = null, colors = settingsSwitchColors())
     }
 }
 
@@ -239,6 +310,12 @@ fun SettingsScreen(
     autoStartOnWifiDisconnect: Boolean,
     autoStopOnWifiConnect: Boolean,
     autoPowerSave: Boolean,
+    webhookEnabled: Boolean,
+    webhookUrl: String,
+    webhookId: String,
+    onWebhookEnabled: (Boolean) -> Unit,
+    onWebhookUrl: (String) -> Unit,
+    onWebhookId: (String) -> Unit,
     minIntervalSec: Int,
     maxIntervalSec: Int,
     smartMove: Boolean,
@@ -310,328 +387,378 @@ fun SettingsScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+    var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    val focusManager = LocalFocusManager.current
+    BackHandler(enabled = section != null) {
+        focusManager.clearFocus()
+        section = null
+    }
+
+    val pageState = rememberSaveableStateHolder()
+    val overviewScroll = rememberScrollState()
+    val navigateBack = {
+        focusManager.clearFocus()
+        if (section == null) onBack() else section = null
+    }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = 640.dp).fillMaxSize().padding(horizontal = 16.dp)) {
             Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("Settings", style = MaterialTheme.typography.headlineSmall)
-                TextButton(onClick = onBack) { Text("Back") }
+                IconButton(onClick = navigateBack,
+                    modifier = Modifier.semantics { contentDescription = if (section == null) "Back to station" else "Back to settings" }) {
+                    NavigationArrow(back = true)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(if (section == null) "APRS-TX" else "Settings",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(section?.title ?: "Settings", style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.semantics { heading() })
+                }
             }
-
-            var minText by remember(minIntervalSec) { mutableStateOf(minIntervalSec.toString()) }
-            var maxText by remember(maxIntervalSec) { mutableStateOf(maxIntervalSec.toString()) }
-            var moveText by remember(moveThresholdM) { mutableStateOf(moveThresholdM.toString()) }
-
-            OutlinedTextField(
-                value = minText,
-                onValueChange = { raw ->
-                    minText = raw
-                    raw.toIntOrNull()
-                        ?.takeIf { it in Aprs.MIN_INTERVAL_SEC..Aprs.MAX_INTERVAL_SEC }
-                        ?.let(onMinInterval)
+            HorizontalDivider()
+            AnimatedContent(
+                targetState = section,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                transitionSpec = {
+                    val direction = if (targetState == null) -1 else 1
+                    (slideInHorizontally(tween(220)) { direction * it / 4 } + fadeIn(tween(220))) togetherWith
+                        (slideOutHorizontally(tween(180)) { -direction * it / 4 } + fadeOut(tween(180)))
                 },
-                label = { Text("Min interval (sec [${Aprs.MIN_INTERVAL_SEC}–${Aprs.MAX_INTERVAL_SEC}])") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            OutlinedTextField(
-                value = if (smartMove) maxText else minText,
-                onValueChange = { raw ->
-                    maxText = raw
-                    raw.toIntOrNull()
-                        ?.takeIf { it in minIntervalSec..Aprs.MAX_INTERVAL_SEC }
-                        ?.let(onMaxInterval)
-                },
-                label = { Text("Max interval (sec [${minIntervalSec}–${Aprs.MAX_INTERVAL_SEC}])") },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = smartMove,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
+                label = "Settings navigation",
+            ) { currentSection ->
+                pageState.SaveableStateProvider(currentSection?.name ?: "overview") {
+                    val scroll = if (currentSection == null) overviewScroll else rememberScrollState()
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(scroll).padding(vertical = 24.dp)
+                            .semantics { paneTitle = currentSection?.title ?: "Settings overview" },
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        if (currentSection != null) {
+                            Text(currentSection.description, style = MaterialTheme.typography.bodyLarge)
+                            Text("Valid changes are saved automatically.", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        }
+                        when (currentSection) {
+                            null -> {
+                                Text("Manage your station", style = MaterialTheme.typography.titleLarge)
+                                Text("Choose a category to adjust its settings.", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                SettingsGroup("Beacon & location") {
+                                    SettingsEntry(SettingsSection.TRANSMISSION,
+                                        if (smartMove) "${minIntervalSec}–${maxIntervalSec}s · Move ${moveThresholdM}m" else "Every ${minIntervalSec}s",
+                                    ) { section = it }
+                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                                    SettingsEntry(SettingsSection.AUTOMATION,
+                                        "Power saving ${if (autoPowerSave) "on" else "off"} · WiFi ${if (autoStartOnWifiDisconnect || autoStopOnWifiConnect) "on" else "off"}",
+                                    ) { section = it }
+                                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                                    SettingsEntry(SettingsSection.ZONES,
+                                        if (stopZones.isEmpty()) "No zones configured" else "${stopZones.count { it.enabled }} enabled · ${stopZones.size} total",
+                                    ) { section = it }
+                                }
+                                SettingsGroup("Integrations") {
+                                    SettingsEntry(SettingsSection.WEBHOOK,
+                                        when {
+                                            !webhookEnabled -> "Off · Optional location reporting"
+                                            !Webhook.validUrl(webhookUrl.trim()) || webhookId.isBlank() -> "On · Setup required"
+                                            else -> "On · ${webhookId.trim()}"
+                                        },
+                                    ) { section = it }
+                                }
+                                SettingsGroup("Data & backup") {
+                                    SettingsEntry(SettingsSection.BACKUP, "Export or restore settings as JSON") { section = it }
+                                }
+                                Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+                                    TextButton(onClick = { uriHandler.openUri(GITHUB_URL) },
+                                        modifier = Modifier.semantics { contentDescription = "Open project repository, made by BA7NTM" }) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text("github.com/Nigh/aprs-android", textAlign = TextAlign.Center)
+                                            Text("made by BA7NTM", style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                                        }
+                                    }
+                                }
+                            }
+                            SettingsSection.TRANSMISSION -> {
+                                var minText by remember(minIntervalSec) { mutableStateOf(minIntervalSec.toString()) }
+                                var maxText by remember(maxIntervalSec) { mutableStateOf(maxIntervalSec.toString()) }
+                                var moveText by remember(moveThresholdM) { mutableStateOf(moveThresholdM.toString()) }
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("TX on location change", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "GPS every min interval; TX if moved enough, else at max interval",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = smartMove,
-                    onCheckedChange = onSmartMove,
-                    colors = settingsSwitchColors(),
-                )
-            }
-            if (smartMove) {
-                OutlinedTextField(
-                    value = moveText,
-                    onValueChange = { raw ->
-                        moveText = raw
-                        raw.toIntOrNull()
-                            ?.takeIf { it in Aprs.MIN_MOVE_M..Aprs.MAX_MOVE_M }
-                            ?.let(onMoveThreshold)
-                    },
-                    label = { Text("Move threshold m (${Aprs.MIN_MOVE_M}–${Aprs.MAX_MOVE_M})") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-            }
+                                Text("Timing", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                                OutlinedTextField(
+                                    value = minText,
+                                    onValueChange = { raw ->
+                                        minText = raw
+                                        raw.toIntOrNull()
+                                            ?.takeIf { it in Aprs.MIN_INTERVAL_SEC..Aprs.MAX_INTERVAL_SEC }
+                                            ?.let(onMinInterval)
+                                    },
+                                    label = { Text(if (smartMove) "Minimum interval (seconds)" else "Send interval (seconds)") },
+                                    isError = minText.toIntOrNull()?.let { it in Aprs.MIN_INTERVAL_SEC..Aprs.MAX_INTERVAL_SEC } != true,
+                                    supportingText = { Text("${Aprs.MIN_INTERVAL_SEC}–${Aprs.MAX_INTERVAL_SEC} seconds") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                )
 
-            HorizontalDivider()
+                                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                                SettingsToggle(
+                                    "TX on location change",
+                                    "Check at the minimum interval. Send after moving, or at the maximum interval.",
+                                    smartMove, onSmartMove,
+                                )
+                                if (smartMove) {
+                                    OutlinedTextField(
+                                        value = maxText,
+                                        onValueChange = { raw ->
+                                            maxText = raw
+                                            raw.toIntOrNull()
+                                                ?.takeIf { it in minIntervalSec..Aprs.MAX_INTERVAL_SEC }
+                                                ?.let(onMaxInterval)
+                                        },
+                                        label = { Text("Maximum interval (seconds)") },
+                                        isError = maxText.toIntOrNull()?.let { it in minIntervalSec..Aprs.MAX_INTERVAL_SEC } != true,
+                                        supportingText = { Text("${minIntervalSec}–${Aprs.MAX_INTERVAL_SEC} seconds") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    )
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("Automatic power saving", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "3× GPS timeout → +${GpsPowerSave.STEP_SEC}s poll (max ${GpsPowerSave.MAX_INTERVAL_SEC}s); skip if min ≥${GpsPowerSave.MAX_INTERVAL_SEC}s",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = autoPowerSave,
-                    onCheckedChange = onAutoPowerSave,
-                    colors = settingsSwitchColors(),
-                )
-            }
+                                    OutlinedTextField(
+                                        value = moveText,
+                                        onValueChange = { raw ->
+                                            moveText = raw
+                                            raw.toIntOrNull()
+                                                ?.takeIf { it in Aprs.MIN_MOVE_M..Aprs.MAX_MOVE_M }
+                                                ?.let(onMoveThreshold)
+                                        },
+                                        label = { Text("Move threshold (meters)") },
+                                        isError = moveText.toIntOrNull()?.let { it in Aprs.MIN_MOVE_M..Aprs.MAX_MOVE_M } != true,
+                                        supportingText = { Text("${Aprs.MIN_MOVE_M}–${Aprs.MAX_MOVE_M} meters") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    )
+                                }
+                            }
+                            SettingsSection.AUTOMATION -> {
+                                SettingsToggle("Automatic power saving",
+                                    "After 3 GPS timeouts, increase polling by ${GpsPowerSave.STEP_SEC}s, up to ${GpsPowerSave.MAX_INTERVAL_SEC}s. No change when the minimum interval is already ${GpsPowerSave.MAX_INTERVAL_SEC}s or more.",
+                                    autoPowerSave, onAutoPowerSave)
+                                HorizontalDivider()
+                                Text("WiFi", style = MaterialTheme.typography.titleMedium)
+                                SettingsToggle("Start after disconnecting",
+                                    "Start scheduled TX after ${minIntervalSec}s without WiFi.",
+                                    autoStartOnWifiDisconnect, onAutoStartOnWifiDisconnect)
+                                SettingsToggle("Stop after connecting",
+                                    "Stop scheduled TX when WiFi connects. If WiFi is connected at launch, first stay disconnected for 100s to arm this rule.",
+                                    autoStopOnWifiConnect, onAutoStopOnWifiConnect)
+                            }
+                            SettingsSection.WEBHOOK -> {
+                                SettingsToggle("Enable webhook",
+                                    "Report fresh locations even when stop zones or other rules block APRS.",
+                                    webhookEnabled, onWebhookEnabled)
+                                if (webhookEnabled) {
+                                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                                    Text("Server configuration", style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.semantics { heading() })
+                                    OutlinedTextField(
+                                        value = webhookUrl,
+                                        onValueChange = onWebhookUrl,
+                                        label = { Text("Webhook HTTPS URL") },
+                                        singleLine = true,
+                                        isError = webhookEnabled && !Webhook.validUrl(webhookUrl.trim()),
+                                        supportingText = { Text(if (Webhook.validUrl(webhookUrl.trim())) "Receives JSON POST requests" else "Enter a valid HTTPS URL without userinfo or a fragment") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    OutlinedTextField(
+                                        value = webhookId,
+                                        onValueChange = onWebhookId,
+                                        label = { Text("Webhook reporting ID") },
+                                        singleLine = true,
+                                        isError = webhookEnabled && webhookId.isBlank(),
+                                        supportingText = { Text("Required: identifies you on your webhook server") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                            SettingsSection.ZONES -> {
+                                Text(
+                                    "${stopZones.count { it.enabled }} enabled · ${stopZones.size}/${StopZone.MAX_ZONES} zones",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "APRS is blocked inside enabled zones. Leave by ${StopZone.CLEAR_EXTRA_M}m (${StopZone.LARGE_CLEAR_EXTRA_M}m for radii above ${StopZone.LARGE_RADIUS_THRESHOLD_M}m) to arm auto-stop.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
 
-            HorizontalDivider()
+                                Text("Add a stop zone", style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.semantics { heading() })
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = previewLat,
+                                        onValueChange = { previewLat = it },
+                                        label = { Text("Latitude") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    )
+                                    OutlinedTextField(
+                                        value = previewLon,
+                                        onValueChange = { previewLon = it },
+                                        label = { Text("Longitude") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    )
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                gpsBusy = true
+                                                try {
+                                                    val loc = onFetchGps()
+                                                    previewLat = "%.6f".format(Locale.US, loc.latitude)
+                                                    previewLon = "%.6f".format(Locale.US, loc.longitude)
+                                                } catch (_: Exception) {
+                                                    // parent logs/toasts
+                                                } finally {
+                                                    gpsBusy = false
+                                                }
+                                            }
+                                        },
+                                        enabled = !gpsBusy,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text(if (gpsBusy) "Locating…" else "Use GPS") }
+                                    Button(
+                                        onClick = {
+                                            val lat = previewLat.toDoubleOrNull() ?: return@Button
+                                            val lon = previewLon.toDoubleOrNull() ?: return@Button
+                                            if (stopZones.size >= StopZone.MAX_ZONES) return@Button
+                                            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return@Button
+                                            onStopZonesChange(
+                                                stopZones + StopZone(lat, lon, StopZone.DEFAULT_RADIUS_M, enabled = true),
+                                            )
+                                            previewLat = ""
+                                            previewLon = ""
+                                        },
+                                        enabled = stopZones.size < StopZone.MAX_ZONES &&
+                                            previewLat.toDoubleOrNull()?.let { it in -90.0..90.0 } == true &&
+                                            previewLon.toDoubleOrNull()?.let { it in -180.0..180.0 } == true,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Add zone") }
+                                }
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("Auto-start on WiFi disconnect", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                "Starts after one min interval (${minIntervalSec}s) disconnected; WiFi stop arms after 100s disconnected",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = autoStartOnWifiDisconnect,
-                    onCheckedChange = onAutoStartOnWifiDisconnect,
-                    colors = settingsSwitchColors(),
-                )
-            }
-
-            HorizontalDivider()
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("Auto-stop on WiFi connect", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Stops the schedule when WiFi connects",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = autoStopOnWifiConnect,
-                    onCheckedChange = onAutoStopOnWifiConnect,
-                    colors = settingsSwitchColors(),
-                )
-            }
-
-            HorizontalDivider()
-
-            Text(
-                "Stop zones (${stopZones.size}/${StopZone.MAX_ZONES})",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                "Auto-stop when entering an enabled zone (clearance +${StopZone.CLEAR_EXTRA_M}m, or +${StopZone.LARGE_CLEAR_EXTRA_M}m above ${StopZone.LARGE_RADIUS_THRESHOLD_M}m radius)",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = previewLat,
-                    onValueChange = { previewLat = it },
-                    label = { Text("Latitude") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
-                OutlinedTextField(
-                    value = previewLon,
-                    onValueChange = { previewLon = it },
-                    label = { Text("Longitude") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            gpsBusy = true
-                            try {
-                                val loc = onFetchGps()
-                                previewLat = "%.6f".format(loc.latitude)
-                                previewLon = "%.6f".format(loc.longitude)
-                            } catch (_: Exception) {
-                                // parent logs/toasts
-                            } finally {
-                                gpsBusy = false
+                                if (stopZones.isEmpty()) {
+                                    Text("No stop zones yet. Use GPS or enter coordinates to add one.", style = MaterialTheme.typography.bodyMedium)
+                                }
+                                if (stopZones.isNotEmpty()) Text("Your stop zones", style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.semantics { heading() })
+                                stopZones.forEachIndexed { index, zone ->
+                                    key(zone.id) {
+                                        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
+                                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                Row(
+                                                    Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    Text(
+                                                        "Stop zone ${index + 1}\n%.4f°, %.4f°".format(zone.latitude, zone.longitude),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        modifier = Modifier.weight(1f),
+                                                    )
+                                                    Switch(
+                                                        modifier = Modifier.semantics { contentDescription = "Enable ${zone.note.ifBlank { "stop zone ${index + 1}" }}" },
+                                                        checked = zone.enabled,
+                                                        onCheckedChange = { on ->
+                                                            onStopZonesChange(stopZones.toMutableList().also {
+                                                                it[index] = zone.copy(enabled = on)
+                                                            })
+                                                        },
+                                                        colors = settingsSwitchColors(),
+                                                    )
+                                                }
+                                                OutlinedTextField(
+                                                    value = zone.note,
+                                                    onValueChange = { note ->
+                                                        onStopZonesChange(stopZones.toMutableList().also {
+                                                            it[index] = zone.copy(note = StopZone.clampNote(note))
+                                                        })
+                                                    },
+                                                    label = { Text("Note (optional, 64 characters)") },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    singleLine = true,
+                                                )
+                                                Row(
+                                                    Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                ) {
+                                                    var radiusText by remember(zone.id, zone.radiusM) {
+                                                        mutableStateOf(zone.radiusM.toString())
+                                                    }
+                                                    OutlinedTextField(
+                                                        value = radiusText,
+                                                        onValueChange = { raw ->
+                                                            radiusText = raw
+                                                            raw.toIntOrNull()
+                                                                ?.takeIf { it in StopZone.MIN_RADIUS_M..StopZone.MAX_RADIUS_M }
+                                                                ?.let { n ->
+                                                                    onStopZonesChange(stopZones.toMutableList().also {
+                                                                        it[index] = zone.copy(radiusM = n)
+                                                                    })
+                                                                }
+                                                        },
+                                                        label = { Text("Radius (meters)") },
+                                                        isError = radiusText.toIntOrNull()?.let { it in StopZone.MIN_RADIUS_M..StopZone.MAX_RADIUS_M } != true,
+                                                        supportingText = { Text("${StopZone.MIN_RADIUS_M}–${StopZone.MAX_RADIUS_M} meters") },
+                                                        modifier = Modifier.weight(1f),
+                                                        singleLine = true,
+                                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                    )
+                                                    TextButton(
+                                                        onClick = {
+                                                            onStopZonesChange(stopZones.toMutableList().also { it.removeAt(index) })
+                                                        },
+                                                    ) { Text("Remove") }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            SettingsSection.BACKUP -> {
+                                Text(
+                                    "Save or restore all settings, including APRS credentials, automation, webhook, and stop zones. Keep exported files private.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = { exportLauncher.launch("aprs-tx-settings.json") },
+                                        enabled = !backupBusy,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Export JSON") }
+                                    OutlinedButton(
+                                        onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) },
+                                        enabled = !backupBusy,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Import JSON") }
+                                }
                             }
                         }
-                    },
-                    enabled = !gpsBusy,
-                    modifier = Modifier.weight(1f),
-                ) { Text(if (gpsBusy) "…" else "GPS") }
-                Button(
-                    onClick = {
-                        val lat = previewLat.toDoubleOrNull() ?: return@Button
-                        val lon = previewLon.toDoubleOrNull() ?: return@Button
-                        if (stopZones.size >= StopZone.MAX_ZONES) return@Button
-                        if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return@Button
-                        onStopZonesChange(
-                            stopZones + StopZone(lat, lon, StopZone.DEFAULT_RADIUS_M, enabled = true),
-                        )
-                        previewLat = ""
-                        previewLon = ""
-                    },
-                    enabled = stopZones.size < StopZone.MAX_ZONES &&
-                        previewLat.toDoubleOrNull() != null &&
-                        previewLon.toDoubleOrNull() != null,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Add") }
-            }
-
-            stopZones.forEachIndexed { index, zone ->
-                HorizontalDivider()
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "%.4f°, %.4f°".format(zone.latitude, zone.longitude),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = zone.enabled,
-                        onCheckedChange = { on ->
-                            onStopZonesChange(stopZones.toMutableList().also {
-                                it[index] = zone.copy(enabled = on)
-                            })
-                        },
-                        colors = settingsSwitchColors(),
-                    )
-                }
-                OutlinedTextField(
-                    value = zone.note,
-                    onValueChange = { note ->
-                        onStopZonesChange(stopZones.toMutableList().also {
-                            it[index] = zone.copy(note = StopZone.clampNote(note))
-                        })
-                    },
-                    label = { Text("Note (optional, 64 characters)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    var radiusText by remember(zone.latitude, zone.longitude, zone.radiusM) {
-                        mutableStateOf(zone.radiusM.toString())
                     }
-                    OutlinedTextField(
-                        value = radiusText,
-                        onValueChange = { raw ->
-                            radiusText = raw
-                            raw.toIntOrNull()
-                                ?.takeIf { it in StopZone.MIN_RADIUS_M..StopZone.MAX_RADIUS_M }
-                                ?.let { n ->
-                                    onStopZonesChange(stopZones.toMutableList().also {
-                                        it[index] = zone.copy(radiusM = n)
-                                    })
-                                }
-                        },
-                        label = { Text("Radius m (${StopZone.MIN_RADIUS_M}–${StopZone.MAX_RADIUS_M})") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    TextButton(
-                        onClick = {
-                            onStopZonesChange(stopZones.toMutableList().also { it.removeAt(index) })
-                        },
-                    ) { Text("Remove") }
                 }
             }
-
-            HorizontalDivider()
-
-            Text("Backup", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Export/import callsign, intervals, WiFi, and stop zones as JSON",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { exportLauncher.launch("aprs-tx-settings.json") },
-                    enabled = !backupBusy,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Export") }
-                OutlinedButton(
-                    onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) },
-                    enabled = !backupBusy,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Import") }
-            }
-        }
-
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            TextButton(
-                onClick = { uriHandler.openUri(GITHUB_URL) },
-                modifier = Modifier.height(32.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-            ) {
-                Text("github.com/Nigh/aprs-android")
-            }
-            Text(
-                text = "made by BA7NTM",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

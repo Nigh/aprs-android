@@ -163,7 +163,8 @@ object LocationHelper {
             accuracy = if (location.hasAccuracy()) location.accuracy else null,
             altitude = if (location.hasAltitude()) location.altitude else null,
             speedMps = speed,
-            timestampMs = System.currentTimeMillis(),
+            timestampMs = System.currentTimeMillis() - ageMs(location),
+            bearingDeg = if (location.hasBearing()) location.bearing else null,
         )
         if (speed == null && previous != null) {
             speed = Aprs.averageSpeedMps(previous, current)

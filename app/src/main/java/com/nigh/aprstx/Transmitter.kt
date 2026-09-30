@@ -27,9 +27,22 @@ object Transmitter {
         logs: LogStore,
         reason: String,
         location: AprsLocation? = null,
+        reportWebhook: Boolean = true,
     ): TransmitResult {
         BeaconRuntime.setBusy(true)
         try {
+            logs.add("Acquiring GPS location for $reason", LogType.INFO)
+            val loc = try {
+                location ?: ensureFreshLocation(context, settings)
+            } catch (e: Exception) {
+                val msg = "GPS acquisition failed: ${e.message ?: "Unknown error"}"
+                logs.add(msg, LogType.ERROR)
+                BeaconRuntime.emitToast(msg, LogType.ERROR)
+                return TransmitResult(false, msg)
+            }
+
+            if (reportWebhook) Webhook.report(context, settings, logs, loc)
+
             val wait = txCooldownRemainingSec(System.currentTimeMillis(), settings.lastTxAtMs)
             if (wait > 0) {
                 val msg = "Minimum interval ${Aprs.MIN_INTERVAL_SEC}s — wait ${wait}s"
@@ -38,11 +51,9 @@ object Transmitter {
                 return TransmitResult(false, msg)
             }
 
-            logs.add("Acquiring GPS location for $reason", LogType.INFO)
-            val loc = try {
-                location ?: ensureFreshLocation(context, settings)
-            } catch (e: Exception) {
-                val msg = "GPS acquisition failed: ${e.message ?: "Unknown error"}"
+            val validation = Aprs.validateCallsign(settings.callsign, settings.passcode)
+            if (!validation.valid) {
+                val msg = validation.message ?: "Validation failed"
                 logs.add(msg, LogType.ERROR)
                 BeaconRuntime.emitToast(msg, LogType.ERROR)
                 return TransmitResult(false, msg)

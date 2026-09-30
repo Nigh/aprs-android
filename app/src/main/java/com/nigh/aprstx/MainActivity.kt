@@ -72,6 +72,9 @@ class MainActivity : ComponentActivity() {
             var autoStartWifi by remember { mutableStateOf(settings.autoStartOnWifiDisconnect) }
             var autoStopWifi by remember { mutableStateOf(settings.autoStopOnWifiConnect) }
             var autoPowerSave by remember { mutableStateOf(settings.autoPowerSaveEnabled) }
+            var webhookEnabled by remember { mutableStateOf(settings.webhookEnabled) }
+            var webhookUrl by remember { mutableStateOf(settings.webhookUrl) }
+            var webhookId by remember { mutableStateOf(settings.webhookId) }
             var stopZones by remember { mutableStateOf(settings.stopZones) }
 
             BackHandler(enabled = screen != "main") {
@@ -98,6 +101,12 @@ class MainActivity : ComponentActivity() {
                             autoStartOnWifiDisconnect = autoStartWifi,
                             autoStopOnWifiConnect = autoStopWifi,
                             autoPowerSave = autoPowerSave,
+                            webhookEnabled = webhookEnabled,
+                            webhookUrl = webhookUrl,
+                            webhookId = webhookId,
+                            onWebhookEnabled = { webhookEnabled = it; settings.webhookEnabled = it },
+                            onWebhookUrl = { webhookUrl = it; settings.webhookUrl = it },
+                            onWebhookId = { webhookId = it; settings.webhookId = it },
                             minIntervalSec = minInterval,
                             maxIntervalSec = maxInterval,
                             smartMove = smartMove,
@@ -170,6 +179,9 @@ class MainActivity : ComponentActivity() {
                                 autoStartWifi = settings.autoStartOnWifiDisconnect
                                 autoStopWifi = settings.autoStopOnWifiConnect
                                 autoPowerSave = settings.autoPowerSaveEnabled
+                                webhookEnabled = settings.webhookEnabled
+                                webhookUrl = settings.webhookUrl
+                                webhookId = settings.webhookId
                                 stopZones = settings.stopZones
                                 WifiAutoBeacon.ensureListening(this@MainActivity)
                                 true
@@ -232,12 +244,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onSend = {
-                                val v = Aprs.validateCallsign(callsign, passcode)
-                                if (!v.valid) {
-                                    logs.add(v.message ?: "Validation failed", LogType.ERROR)
-                                    BeaconRuntime.emitToast(v.message ?: "Validation failed", LogType.ERROR)
-                                    return@MainScreen
-                                }
                                 ensureRuntimePermissions()
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
