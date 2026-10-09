@@ -15,7 +15,8 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.suspendCancellableCoroutine
+import android.os.CancellationSignal
 
 object LocationHelper {
     fun hasFineLocation(context: Context): Boolean =
@@ -47,13 +48,16 @@ object LocationHelper {
             return toAprs(recent, previous)
         }
 
-        return suspendCoroutine { cont ->
+        return suspendCancellableCoroutine { cont ->
             val main = Handler(Looper.getMainLooper())
             var finished = false
-            fun finish(block: () -> Unit) {
-                if (finished) return
-                finished = true
-                block()
+            val signal = CancellationSignal()
+            fun finish(block: () -> Unit) = synchronized(main) {
+                if (!finished) {
+                    finished = true
+                    signal.cancel()
+                    block()
+                }
             }
 
             val listener = object : LocationListener {
@@ -89,9 +93,15 @@ object LocationHelper {
                 }
             }
 
+            cont.invokeOnCancellation {
+                finish {
+                    main.removeCallbacksAndMessages(null)
+                    try { lm.removeUpdates(listener) } catch (_: Exception) {}
+                }
+            }
             try {
+                if (!cont.isActive) return@suspendCancellableCoroutine
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    // ponytail: CancellationSignal omitted — timeout path removes updates / resumes once
                     val executor = ContextCompat.getMainExecutor(context)
                     val consumer = java.util.function.Consumer<Location?> { loc ->
                         finish {
@@ -113,7 +123,7 @@ object LocationHelper {
                         lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
                         else -> LocationManager.PASSIVE_PROVIDER
                     }
-                    lm.getCurrentLocation(provider, null, executor, consumer)
+                    lm.getCurrentLocation(provider, signal, executor, consumer)
                 } else {
                     val criteria = Criteria().apply {
                         accuracy = Criteria.ACCURACY_FINE
@@ -122,7 +132,11 @@ object LocationHelper {
                     @Suppress("DEPRECATION")
                     lm.requestSingleUpdate(criteria, listener, Looper.getMainLooper())
                 }
-                main.postDelayed(timeout, timeoutMs)
+                if (cont.isActive) main.postDelayed(timeout, timeoutMs)
+                else {
+                    signal.cancel()
+                    lm.removeUpdates(listener)
+                }
             } catch (e: Exception) {
                 finish {
                     main.removeCallbacks(timeout)

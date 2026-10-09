@@ -113,7 +113,6 @@ fun MainScreen(
     maxIntervalSec: Int,
     smartMove: Boolean,
     moveThresholdM: Int,
-    hasStopZones: Boolean,
     onCallsign: (String) -> Unit,
     onPasscode: (String) -> Unit,
     onComment: (String) -> Unit,
@@ -123,8 +122,6 @@ fun MainScreen(
     onStartSchedule: () -> Unit,
     onStopSchedule: () -> Unit,
     onOpenLogs: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenZoneMap: () -> Unit,
 ) {
     var passcodeFocused by remember { mutableStateOf(false) }
 
@@ -141,7 +138,6 @@ fun MainScreen(
                 Text("APRS-TX", style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f).semantics { heading() })
                 TextButton(onClick = onOpenLogs) { Text("Logs") }
-                TextButton(onClick = onOpenSettings) { Text("Settings") }
             }
             HorizontalDivider()
             Column(
@@ -188,7 +184,6 @@ fun MainScreen(
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text("Location", style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.weight(1f).semantics { heading() })
-                            if (hasStopZones) TextButton(onClick = onOpenZoneMap) { Text("Zone map") }
                         }
                         if (location != null) {
                             Text("%.4f°, %.4f°".format(location.latitude, location.longitude),
@@ -310,6 +305,8 @@ fun SettingsScreen(
     autoStartOnWifiDisconnect: Boolean,
     autoStopOnWifiConnect: Boolean,
     autoPowerSave: Boolean,
+    showTxSuccessToast: Boolean,
+    onShowTxSuccessToast: (Boolean) -> Unit,
     webhookEnabled: Boolean,
     webhookUrl: String,
     webhookId: String,
@@ -407,12 +404,12 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                IconButton(onClick = navigateBack,
-                    modifier = Modifier.semantics { contentDescription = if (section == null) "Back to station" else "Back to settings" }) {
+                if (section != null) IconButton(onClick = navigateBack,
+                    modifier = Modifier.semantics { contentDescription = "Back to settings" }) {
                     NavigationArrow(back = true)
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(if (section == null) "APRS-TX" else "Settings",
+                    if (section != null) Text("Settings",
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(section?.title ?: "Settings", style = MaterialTheme.typography.headlineSmall,
                         modifier = Modifier.semantics { heading() })
@@ -485,6 +482,10 @@ fun SettingsScreen(
                                 }
                             }
                             SettingsSection.TRANSMISSION -> {
+                                SettingsToggle("Show TX success toast",
+                                    "Show a short message after each successful APRS transmission. Errors and cancellation messages remain visible.",
+                                    showTxSuccessToast, onShowTxSuccessToast)
+                                HorizontalDivider()
                                 var minText by remember(minIntervalSec) { mutableStateOf(minIntervalSec.toString()) }
                                 var maxText by remember(maxIntervalSec) { mutableStateOf(maxIntervalSec.toString()) }
                                 var moveText by remember(moveThresholdM) { mutableStateOf(moveThresholdM.toString()) }
@@ -560,6 +561,16 @@ fun SettingsScreen(
                                     autoStopOnWifiConnect, onAutoStopOnWifiConnect)
                             }
                             SettingsSection.WEBHOOK -> {
+                                Text("Device identity", style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.semantics { heading() })
+                                Text("Copy the device_hash sent with every report to register this device on your server. It identifies the device; it is not a request signature.",
+                                    style = MaterialTheme.typography.bodyMedium)
+                                OutlinedButton(onClick = {
+                                    val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Device hash", Webhook.deviceHash(context)))
+                                    if (android.os.Build.VERSION.SDK_INT < 33) BeaconRuntime.emitToast("Device hash copied", LogType.SUCCESS)
+                                }) { Text("Copy device hash") }
+                                HorizontalDivider()
                                 SettingsToggle("Enable webhook",
                                     "Report fresh locations even when stop zones or other rules block APRS.",
                                     webhookEnabled, onWebhookEnabled)

@@ -89,7 +89,7 @@ object Transmitter {
             )
             val type = if (result.success) LogType.SUCCESS else LogType.ERROR
             logs.add(result.message, type)
-            BeaconRuntime.emitToast(result.message, type)
+            if (!result.success || settings.showTxSuccessToast) BeaconRuntime.emitToast(result.message, type)
             if (result.success) {
                 settings.lastTxAtMs = System.currentTimeMillis()
                 settings.lastTxLat = loc.latitude

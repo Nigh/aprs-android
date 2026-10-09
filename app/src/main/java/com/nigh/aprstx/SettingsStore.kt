@@ -17,6 +17,7 @@ data class SettingsBackup(
     val autoStartOnWifiDisconnect: Boolean = false,
     val autoStopOnWifiConnect: Boolean = false,
     val autoPowerSaveEnabled: Boolean = true,
+    val showTxSuccessToast: Boolean = true,
     val webhookEnabled: Boolean = false,
     val webhookUrl: String = "",
     val webhookId: String = "",
@@ -49,6 +50,7 @@ fun encodeSettingsBackup(b: SettingsBackup): String {
         .put("autoStartOnWifiDisconnect", b.autoStartOnWifiDisconnect)
         .put("autoStopOnWifiConnect", b.autoStopOnWifiConnect)
         .put("autoPowerSaveEnabled", b.autoPowerSaveEnabled)
+        .put("showTxSuccessToast", b.showTxSuccessToast)
         .put("webhookEnabled", b.webhookEnabled)
         .put("webhookUrl", b.webhookUrl)
         .put("webhookId", b.webhookId)
@@ -86,6 +88,7 @@ fun decodeSettingsBackup(raw: String): SettingsBackup? = runCatching {
         autoStartOnWifiDisconnect = o.optBoolean("autoStartOnWifiDisconnect", false),
         autoStopOnWifiConnect = o.optBoolean("autoStopOnWifiConnect", false),
         autoPowerSaveEnabled = o.optBoolean("autoPowerSaveEnabled", true),
+        showTxSuccessToast = o.optBoolean("showTxSuccessToast", true),
         webhookEnabled = o.optBoolean("webhookEnabled", false),
         webhookUrl = o.optString("webhookUrl", ""),
         webhookId = o.optString("webhookId", ""),
@@ -178,6 +181,10 @@ class SettingsStore(context: Context) {
     var autoPowerSaveEnabled: Boolean
         get() = prefs.getBoolean("autoPowerSaveEnabled", true)
         set(v) = prefs.edit().putBoolean("autoPowerSaveEnabled", v).apply()
+
+    var showTxSuccessToast: Boolean
+        get() = prefs.getBoolean("showTxSuccessToast", true)
+        set(v) = prefs.edit().putBoolean("showTxSuccessToast", v).apply()
 
     var webhookEnabled: Boolean
         get() = prefs.getBoolean("webhookEnabled", false)
@@ -272,6 +279,7 @@ class SettingsStore(context: Context) {
         autoStartOnWifiDisconnect = autoStartOnWifiDisconnect,
         autoStopOnWifiConnect = autoStopOnWifiConnect,
         autoPowerSaveEnabled = autoPowerSaveEnabled,
+        showTxSuccessToast = showTxSuccessToast,
         webhookEnabled = webhookEnabled,
         webhookUrl = webhookUrl,
         webhookId = webhookId,
@@ -290,6 +298,7 @@ class SettingsStore(context: Context) {
         autoStartOnWifiDisconnect = b.autoStartOnWifiDisconnect
         autoStopOnWifiConnect = b.autoStopOnWifiConnect
         autoPowerSaveEnabled = b.autoPowerSaveEnabled
+        showTxSuccessToast = b.showTxSuccessToast
         webhookEnabled = b.webhookEnabled
         webhookUrl = b.webhookUrl
         webhookId = b.webhookId

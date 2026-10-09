@@ -1,5 +1,12 @@
 package com.nigh.aprstx
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.activity.ComponentActivity
+import kotlinx.coroutines.CancellationException
+
 import android.graphics.Paint
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.animation.core.LinearEasing
@@ -147,11 +154,14 @@ fun ZoneMapScreen(
     val recentInitial = remember(initialLocation) {
         initialLocation?.takeIf { System.currentTimeMillis() - it.timestampMs in 0..INITIAL_LOCATION_MAX_AGE_MS }
     }
-    var viewport by remember { mutableStateOf<MapViewport?>(null) }
+    var viewport by rememberSaveable(stateSaver = listSaver<MapViewport?, Double>(
+        save = { v -> v?.let { listOf(it.lat, it.lon, it.metersPerPx, it.bearingDeg.toDouble()) } ?: emptyList() },
+        restore = { if (it.size == 4) MapViewport(it[0], it[1], it[2], it[3].toFloat()) else null },
+    )) { mutableStateOf<MapViewport?>(null) }
     var currentLocation by remember { mutableStateOf(recentInitial) }
     var mapSize by remember { mutableStateOf(IntSize.Zero) }
-    var followLocation by remember { mutableStateOf(true) }
-    var selectedId by remember { mutableStateOf<String?>(null) }
+    var followLocation by rememberSaveable { mutableStateOf(true) }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var gpsAttemptKey by remember { mutableStateOf(0) }
     var gpsError by remember { mutableStateOf<String?>(null) }
     val locationPulse by rememberInfiniteTransition(label = "locationPulse").animateFloat(
@@ -166,9 +176,20 @@ fun ZoneMapScreen(
             viewport = defaultViewport(recentInitial, mapSize)
         }
     }
-    LaunchedEffect(gpsAttemptKey) {
+    val lifecycle = (context as ComponentActivity).lifecycle
+    var resumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, _ ->
+            resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(gpsAttemptKey, resumed) {
+        if (!resumed) return@LaunchedEffect
         while (true) {
             val result = runCatching { LocationHelper.getLocation(context, currentLocation) }
+            result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
             val loc = result.getOrNull()
             if (loc == null) {
                 if (currentLocation == null) {
@@ -260,7 +281,6 @@ fun ZoneMapScreen(
             },
             modifier = Modifier.align(Alignment.TopStart),
         ) { Text("Me · 10 km") }
-        TextButton(onClick = onBack, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)) { Text("Back") }
         Text(
             "© OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors",
             color = Color.White.copy(alpha = 0.8f),
@@ -281,7 +301,7 @@ fun ZoneMapScreen(
                 confirmButton = {
                     TextButton(onClick = { gpsError = null; gpsAttemptKey++ }) { Text("Retry") }
                 },
-                dismissButton = { TextButton(onClick = onBack) { Text("Exit Zone map") } },
+                dismissButton = { TextButton(onClick = onBack) { Text("Exit Map") } },
             )
         }
         val selected = zones.firstOrNull { it.id == selectedId }

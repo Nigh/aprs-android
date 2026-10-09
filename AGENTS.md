@@ -32,7 +32,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 |------|------|
 | `Aprs.kt` | 包格式（`!lat/lon[CSE/SPD`comment）、校验、Haversine 均速；TX 委托 `AprsIs` |
 | `AprsIs.kt` | 区域 rotate 选择、login、TCP 发包（短连接） |
-| `LocationHelper.kt` | 单次定位；&lt;30s last-known 优先；保留原始 fix 年龄与可选 bearing |
+| `LocationHelper.kt` | 可取消的单次定位（取消/超时清理监听与 CancellationSignal）；&lt;30s last-known 优先；保留原始 fix 年龄与可选 bearing |
 | `Webhook.kt` | HTTPS JSON POST；ID + SHA-256 设备 hash + ≤60s 有效位置；可选 accuracy/speed/bearing/altitude，无值为 null |
 | `BeaconService.kt` | 前台 `location` 服务：间隔信标 + 短时 PARTIAL wake |
 | `BeaconRuntime.kt` | 进程内 UI 状态（active/countdown/location/toast） |
@@ -42,7 +42,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `SmartBeacon.kt` | 最小/最大间隔与位移 TX 判定（`shouldBeaconTx`）；任意两次发包 ≥30s |
 | `GpsPowerSave.kt` | 连续 GPS 超时退避（3 次 +30s，上限 300s；成功恢复 min；min≥300 不干预）；`BeaconService` 轮询间隔 |
 | `Transmitter.kt` | GPS+发包共享逻辑；所有发送在定位后统一检查 Stop zone，区内取消并提示；成功 TX 记 lastTx；全局 30s cooldown |
-| `MainActivity.kt` / `Ui.kt` / `ZoneMap.kt` | 主界面（passcode 编辑聚焦时明文、失焦时遮罩，Send once / Start scheduled TX；固定顶栏 Logs / Settings；主页 Station / Location / Transmission 分块、最大宽 640dp 与键盘避让，Zone map 在 Location 标题旁；运行状态/轮询倒计时/进度独立于 Stop 按钮，定时发送为主操作，Send once 次操作）+ Settings（高对比度统一 Switch 配色、min/max interval、位移 TX、Automatic power saving、WiFi、Stop zones〔备注、Add 成功后清空经纬度输入〕/ Zone map、JSON 导入/导出、总览页尾 GitHub / made by BA7NTM 同一链接块居中对齐、两行间距 2dp）+ Logs；Zone map 以 MapLibre + OpenFreeMap Dark（OSM）作底图、现有 Canvas 作交互覆盖层，MapLibre bearing 与 Canvas 旋转符号相反以保持对齐，并显示完整署名；Settings 采用总览 + Transmission / Automation / Webhook / Stop zones / Backup 分类详情，显示实时摘要；总览按 Beacon & location / Integrations / Data & backup 分组圆角列表与右箭头；左侧 ≥48dp 返回箭头、父级标签和详情标题，220ms 定向滑动淡入/180ms 淡出（遵循系统动画缩放）、paneTitle 语义、返回保留总览滚动位置；详情显示用途/自动保存说明及表单小标题；每个 Stop zone 独立圆角编辑块、半径范围错误提示；固定标题、独立滚动、最大内容宽 640dp、键盘避让，位移 TX / webhook 启用才显示附属字段，开关整行可点；详情系统返回先回总览，Settings 总览/Logs 返回主界面；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
+| `MainActivity.kt` / `Ui.kt` / `ZoneMap.kt` | 主界面（passcode 编辑聚焦时明文、失焦时遮罩，Send once / Start scheduled TX；Home 顶栏 Logs + 底部 Home / Map / Settings 主导航；主页 Station / Location / Transmission 分块、最大宽 640dp 与键盘避让，Map 位于底部主导航，无 Stop zones 亦可进入；运行状态/轮询倒计时/进度独立于 Stop 按钮，定时发送为主操作，Send once 次操作）+ Settings（高对比度统一 Switch 配色、min/max interval、位移 TX、Automatic power saving、WiFi、Stop zones〔备注、Add 成功后清空经纬度输入〕/ Map、JSON 导入/导出、总览页尾 GitHub / made by BA7NTM 同一链接块居中对齐、两行间距 2dp）+ Logs；Map 以 MapLibre + OpenFreeMap Dark（OSM）作底图、现有 Canvas 作交互覆盖层，MapLibre bearing 与 Canvas 旋转符号相反以保持对齐，并显示完整署名；Settings 采用总览 + Transmission / Automation / Webhook / Stop zones / Backup 分类详情，显示实时摘要；总览按 Beacon & location / Integrations / Data & backup 分组圆角列表与右箭头；分类详情左侧 ≥48dp 返回箭头、父级标签和详情标题（总览无返回箭头），220ms 定向滑动淡入/180ms 淡出（遵循系统动画缩放）、paneTitle 语义、返回保留总览滚动位置；详情显示用途/自动保存说明及表单小标题；每个 Stop zone 独立圆角编辑块、半径范围错误提示；固定标题、独立滚动、最大内容宽 640dp、键盘避让，位移 TX / webhook 启用才显示附属字段，开关整行可点；详情系统返回先回总览，Settings 总览/Logs 返回主界面；根 `Surface` 用 `WindowInsets.safeDrawing`（targetSdk 35 edge-to-edge） |
 | `SettingsStore.kt` | SharedPreferences；`SettingsBackup` JSON 编解码（不含 lastTx/位置） |
 | `XianiiTheme.kt` | Compose 主题：[@xianii/design-system](https://github.com/Nigh/xianii-theme) token → Material3（跟系统深/浅） |
 | `res/mipmap-anydpi/ic_launcher*.xml` | 自适应 launcher icon（新版透明 APRS 图稿保持比例居中缩至 60% 安全区；主色 #26252f bg 全幅 → `drawable/ic_launcher_{foreground,background}.png`） |
@@ -63,8 +63,15 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - TX 前后 `PARTIAL_WAKE_LOCK` ≤60s，间隔内仅 `delay` 倒计时。
 - 通知 channel：`IMPORTANCE_LOW` + silent。
 - WiFi 自动启停：`Settings` 两项（断连后等一个 min interval 再 start）；监听开始时已有 WiFi 则 auto-stop 初始未武装，需完全断连并连续保持 100s 才武装，100s 内重连会取消且下次断连从 0 计时，武装后连上才 stop；`ConnectivityManager` NetworkCallback，进程被杀则失效。
-- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径 50–5000m + 64 字符备注）；任何发送（单次或 scheduled）定位处于启用区内均取消，单次发送弹出带区名/编号的提示；Beacon 每次 GPS 轮次判定；启动时已在启用区内不发包，需离开全部区外并越过迟滞距离再武装（半径 ≤1000m 时 +50m，>1000m 时 +100m）；武装后进入启用区则本轮不发包并 stop。Zone map 使用 OpenFreeMap Dark 矢量 OSM 底图（MapLibre 负责网络与缓存；不可用时保留本地深色背景和网格）、以固定 Web Mercator 世界坐标锚定、随地理坐标平移/旋转且会按缩放细分的网格平面图（双指缩放/旋转、指北针点按复北、带文字比例尺、当前位置呼吸光环、视图外 20km 内全部 Zone 的边缘方向/距离提示（20km 内无 Zone 则提示最近一个；标签沿四边分组避碰，名称/编号与距离分两行，带引导线、背景和边框且限制在屏内））：进入时仅接受 5min 内最近位置，否则显示定位中提示；首次定位失败弹 Retry/Exit 对话框；默认自身中心、屏幕长边 10km 半径且可按钮复位；手势监听不以 viewport 为 key，避免连续拖动/缩放被重启；仅前台每 5s 单次定位、不会改变发包循环状态；成功 TX 留点并连线，开启新 scheduled session 才清除；事件色由 scheduled TX 地理判定写入（黄待离开、绿已武装、红进入并停止，红保留到下一次 scheduled session 首次判定）。
+- Geo auto-stop：`Settings` 最多 16 个 StopZone（每区 Switch + 半径 50–5000m + 64 字符备注）；任何发送（单次或 scheduled）定位处于启用区内均取消，单次发送弹出带区名/编号的提示；Beacon 每次 GPS 轮次判定；启动时已在启用区内不发包，需离开全部区外并越过迟滞距离再武装（半径 ≤1000m 时 +50m，>1000m 时 +100m）；武装后进入启用区则本轮不发包并 stop。Map 使用 OpenFreeMap Dark 矢量 OSM 底图（MapLibre 负责网络与缓存；不可用时保留本地深色背景和网格）、以固定 Web Mercator 世界坐标锚定、随地理坐标平移/旋转且会按缩放细分的网格平面图（双指缩放/旋转、指北针点按复北、带文字比例尺、当前位置呼吸光环、视图外 20km 内全部 Zone 的边缘方向/距离提示（20km 内无 Zone 则提示最近一个；标签沿四边分组避碰，名称/编号与距离分两行，带引导线、背景和边框且限制在屏内））：进入时仅接受 5min 内最近位置，否则显示定位中提示；首次定位失败弹 Retry/Exit 对话框；默认自身中心、屏幕长边 10km 半径且可按钮复位；手势监听不以 viewport 为 key，避免连续拖动/缩放被重启；仅前台每 5s 单次定位、不会改变发包循环状态；成功 TX 留点并连线，开启新 scheduled session 才清除；事件色由 scheduled TX 地理判定写入（黄待离开、绿已武装、红进入并停止，红保留到下一次 scheduled session 首次判定）。
 
 ## 自检
 
 - `./build.sh test` / `.\build.ps1 test` → `WebhookTest`（URL/fix 有效性、hash、JSON 可选字段、POST UTF-8/超时/无重定向）及 `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop（含备注/稳定 ID/事件）、TX 轨迹会话清除、min/max/位移 TX 判定、Settings JSON 备份往返、GPS 自动省电退避）。
+
+## 主导航与发送提示（2026-10）
+
+- Home / Map / Settings 为底部主导航（图标+常显标签+选中背景），键盘出现时隐藏；Logs 为 Home 顶栏次级入口，Logs 不显示主导航。Settings 总览无返回箭头，详情返回总览；系统返回最终回 Home。页面通过 SaveableStateHolder 保存分类/滚动；Map 保存视角/跟随/选择，离开即销毁地图并取消 GPS 轮询，仅 Activity resumed 时取点。无 Stop zones 也可进入 Map；用户可见 Map 统一为 Map。
+- Settings → Transmission 的 Show TX success toast 默认开，SharedPreferences `showTxSuccessToast` 并纳入 SettingsBackup JSON，旧备份默认开；Transmitter 成功分支读取开关，手动/定时共用，错误和取消仍提示，FGS 通知不受影响。
+- Settings → Webhook 的 Copy device hash 始终可用，复用 Webhook.deviceHash(Context)，Android 13+ 使用系统剪贴板反馈、旧版 Toast。hash 与请求 device_hash 一致，不写日志/备份；仅设备标识，可供服务端匹配，不是签名或防重放凭证。
+- 自检新增成功 Toast 开关开/关备份往返及旧备份默认值；构建/测试仍仅使用 build.sh / build.ps1。
