@@ -1,6 +1,8 @@
 package com.nigh.aprstx
 
 import android.content.Context
+import android.content.SharedPreferences
+import java.security.SecureRandom
 import android.os.Build
 import android.provider.Settings
 import kotlinx.coroutines.CancellationException
@@ -27,9 +29,9 @@ object Webhook {
             nowMs - loc.timestampMs <= Aprs.STALE_LOCATION_MS
 
     fun deviceHash(identity: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(identity.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        .digest(identity.toByteArray(Charsets.UTF_8)).take(8).joinToString("") { "%02x".format(it) }
 
-    fun deviceHash(context: Context): String {
+    private fun deviceHash(context: Context): String {
         val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         val identity = androidId?.takeIf { it.isNotBlank() } ?: run {
             val prefs = context.getSharedPreferences("webhook-device", Context.MODE_PRIVATE)
@@ -38,6 +40,23 @@ object Webhook {
             }
         }
         return deviceHash("${context.packageName}|$identity|${Build.MANUFACTURER}|${Build.MODEL}")
+    }
+
+    fun authToken(context: Context, refresh: Boolean = false): String = authToken(
+        context.applicationContext.getSharedPreferences("webhook-auth", Context.MODE_PRIVATE), refresh,
+    )
+
+    internal fun authToken(prefs: SharedPreferences, refresh: Boolean = false): String = synchronized(this) {
+        val previous = prefs.getString("token", null)
+        if (!refresh && previous != null) return@synchronized previous
+        val token = ByteArray(32).also { SecureRandom().nextBytes(it) }
+            .joinToString("") { "%02x".format(it) }
+        if (!prefs.edit().putString("token", token).commit()) {
+            // A failed commit still changes the in-memory preferences; restore the previous token.
+            prefs.edit().putString("token", previous).commit()
+            error("Unable to save webhook token")
+        }
+        token
     }
 
     fun payload(id: String, hash: String, loc: AprsLocation): String = JSONObject()
@@ -52,7 +71,7 @@ object Webhook {
         .put("altitude_m", loc.altitude?.takeIf { it.isFinite() } ?: JSONObject.NULL)
         .toString()
 
-    internal fun post(connection: HttpURLConnection, body: String): Int {
+    internal fun post(connection: HttpURLConnection, body: String, token: String): Int {
         try {
             connection.requestMethod = "POST"
             connection.connectTimeout = 5_000
@@ -60,6 +79,7 @@ object Webhook {
             connection.instanceFollowRedirects = false
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            connection.setRequestProperty("Authorization", "Bearer $token")
             val bytes = body.toByteArray(Charsets.UTF_8)
             connection.setFixedLengthStreamingMode(bytes.size)
             connection.outputStream.use { it.write(bytes) }
@@ -83,7 +103,8 @@ object Webhook {
         }
         try {
             val code = withContext(Dispatchers.IO) {
-                post(URI(url).toURL().openConnection() as HttpURLConnection, payload(id, deviceHash(context), loc))
+                val token = authToken(context)
+                post(URI(url).toURL().openConnection() as HttpURLConnection, payload(id, deviceHash(context), loc), token)
             }
             logs.add("Webhook HTTP $code", if (code in 200..299) LogType.SUCCESS else LogType.WARNING)
         } catch (e: CancellationException) {

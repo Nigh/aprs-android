@@ -1,5 +1,7 @@
 package com.nigh.aprstx
 
+import android.content.SharedPreferences
+import java.lang.reflect.Proxy
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -25,7 +27,8 @@ class WebhookTest {
 
     @Test fun payloadPreservesOptionalValuesAndNulls() {
         val hash = Webhook.deviceHash("device-one")
-        assertTrue(hash.matches(Regex("[0-9a-f]{64}")))
+        assertTrue(hash.matches(Regex("[0-9a-f]{16}")))
+        assertEquals("0588a13419dda265", hash)
         assertEquals(hash, Webhook.deviceHash("device-one"))
         assertNotEquals(hash, Webhook.deviceHash("device-two"))
         val loc = AprsLocation(22.5, 113.9, 5f, -12.5, 0f, 100_000L, 0f)
@@ -49,6 +52,44 @@ class WebhookTest {
         assertTrue(invalid.isNull("bearing_deg"))
     }
 
+    @Test fun tokenPersistsAndRefreshesOnlyOnRequest() {
+        val values = mutableMapOf<String, String>()
+        var writes = 0
+        var writable = true
+        val pending = mutableMapOf<String, String?>()
+        val editor = Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader,
+            arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
+            when (method.name) {
+                "putString" -> { pending[args!![0] as String] = args[1] as String?; proxy }
+                "commit" -> {
+                    writes++
+                    pending.forEach { (key, value) -> if (value == null) values.remove(key) else values[key] = value }
+                    writable
+                }
+                else -> error("Unexpected editor call: ${method.name}")
+            }
+        } as SharedPreferences.Editor
+        fun preferences() = Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,
+            arrayOf(SharedPreferences::class.java)) { _, method, args ->
+            when (method.name) {
+                "getString" -> values[args!![0] as String] ?: args[1]
+                "edit" -> editor
+                else -> error("Unexpected preferences call: ${method.name}")
+            }
+        } as SharedPreferences
+        val token = Webhook.authToken(preferences())
+        assertTrue(token.matches(Regex("[0-9a-f]{64}")))
+        assertEquals(token, Webhook.authToken(preferences()))
+        assertEquals(1, writes)
+        val refreshed = Webhook.authToken(preferences(), refresh = true)
+        assertNotEquals(token, refreshed)
+        assertEquals(refreshed, Webhook.authToken(preferences()))
+        assertEquals(2, writes)
+        writable = false
+        assertTrue(runCatching { Webhook.authToken(preferences(), refresh = true) }.isFailure)
+        assertEquals(refreshed, Webhook.authToken(preferences()))
+    }
+
     @Test fun postUsesUtf8AndClosesWithoutFollowingRedirects() {
         val bytes = ByteArrayOutputStream()
         var disconnected = false
@@ -60,8 +101,10 @@ class WebhookTest {
             override fun getResponseCode() = 302
         }
         val body = """{"id":"用户"}"""
-        assertEquals(302, Webhook.post(connection, body))
+        assertEquals(302, Webhook.post(connection, body, "test-token"))
         assertEquals(body, bytes.toString("UTF-8"))
+        assertEquals("Bearer test-token", connection.getRequestProperty("Authorization"))
+        assertFalse(bytes.toString("UTF-8").contains("test-token"))
         assertEquals("POST", connection.requestMethod)
         assertEquals("application/json; charset=utf-8", connection.getRequestProperty("Content-Type"))
         assertFalse(connection.instanceFollowRedirects)

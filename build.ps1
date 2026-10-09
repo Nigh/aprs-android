@@ -97,10 +97,6 @@ for i in `$(seq 1 90); do
     fi
     sleep 1
 done
-if adb shell pm path '$Package' >/dev/null 2>&1; then
-    echo '==> Removing existing install...'
-    adb uninstall '$Package'
-fi
 echo '==> Installing...'
 adb install -r -t '$DebugApk'
 echo '==> Launching...'

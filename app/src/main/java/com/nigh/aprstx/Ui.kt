@@ -49,6 +49,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -338,6 +339,28 @@ fun SettingsScreen(
     var previewLon by remember { mutableStateOf("") }
     var gpsBusy by remember { mutableStateOf(false) }
     var backupBusy by remember { mutableStateOf(false) }
+    var confirmTokenRefresh by remember { mutableStateOf(false) }
+    val copyToken: (Boolean) -> Unit = { refresh ->
+        runCatching {
+            val token = Webhook.authToken(context, refresh)
+            val clip = android.content.ClipData.newPlainText("Webhook authentication token", token)
+            clip.description.extras = android.os.PersistableBundle().apply {
+                putBoolean("android.content.extra.IS_SENSITIVE", true)
+            }
+            context.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(clip)
+        }.onSuccess {
+            if (android.os.Build.VERSION.SDK_INT < 33) BeaconRuntime.emitToast("Authentication token copied", LogType.SUCCESS)
+        }.onFailure {
+            BeaconRuntime.emitToast("Unable to save or copy authentication token. Try again.", LogType.ERROR)
+        }
+    }
+    if (confirmTokenRefresh) AlertDialog(
+        onDismissRequest = { confirmTokenRefresh = false },
+        title = { Text("Refresh authentication token?") },
+        text = { Text("The new token will be copied to your clipboard. Update your server's accepted token before the next report; requests using the new token will otherwise be rejected.") },
+        confirmButton = { TextButton(onClick = { confirmTokenRefresh = false; copyToken(true) }) { Text("Refresh and copy") } },
+        dismissButton = { TextButton(onClick = { confirmTokenRefresh = false }) { Text("Cancel") } },
+    )
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -561,15 +584,14 @@ fun SettingsScreen(
                                     autoStopOnWifiConnect, onAutoStopOnWifiConnect)
                             }
                             SettingsSection.WEBHOOK -> {
-                                Text("Device identity", style = MaterialTheme.typography.titleMedium,
+                                Text("Authentication", style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.semantics { heading() })
-                                Text("Copy the device_hash sent with every report to register this device on your server. It identifies the device; it is not a request signature.",
+                                Text("Register this token on your server and verify the Authorization: Bearer header. The token stays the same across app updates until you refresh it.",
                                     style = MaterialTheme.typography.bodyMedium)
-                                OutlinedButton(onClick = {
-                                    val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Device hash", Webhook.deviceHash(context)))
-                                    if (android.os.Build.VERSION.SDK_INT < 33) BeaconRuntime.emitToast("Device hash copied", LogType.SUCCESS)
-                                }) { Text("Copy device hash") }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = { copyToken(false) }, modifier = Modifier.weight(1f)) { Text("Copy token") }
+                                    TextButton(onClick = { confirmTokenRefresh = true }, modifier = Modifier.weight(1f)) { Text("Refresh token") }
+                                }
                                 HorizontalDivider()
                                 SettingsToggle("Enable webhook",
                                     "Report fresh locations even when stop zones or other rules block APRS.",
