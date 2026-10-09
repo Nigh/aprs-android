@@ -29,7 +29,7 @@ object Webhook {
     fun deviceHash(identity: String): String = MessageDigest.getInstance("SHA-256")
         .digest(identity.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
-    private fun deviceHash(context: Context): String {
+    fun deviceHash(context: Context): String {
         val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         val identity = androidId?.takeIf { it.isNotBlank() } ?: run {
             val prefs = context.getSharedPreferences("webhook-device", Context.MODE_PRIVATE)

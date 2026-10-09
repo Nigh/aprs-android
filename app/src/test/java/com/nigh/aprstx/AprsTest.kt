@@ -330,6 +330,7 @@ class AprsTest {
             autoStartOnWifiDisconnect = true,
             autoStopOnWifiConnect = false,
             autoPowerSaveEnabled = false,
+            showTxSuccessToast = false,
             webhookEnabled = true,
             webhookUrl = "https://example.com/location",
             webhookId = "BA7NTM",
@@ -340,10 +341,13 @@ class AprsTest {
         )
         val decoded = decodeSettingsBackup(encodeSettingsBackup(original))
         assertEquals(original, decoded)
+        val enabled = original.copy(showTxSuccessToast = true)
+        assertEquals(enabled, decodeSettingsBackup(encodeSettingsBackup(enabled)))
         assertEquals(null, decodeSettingsBackup("not-json"))
         // legacy JSON without autoPowerSaveEnabled → default on
         val legacy = decodeSettingsBackup("""{"v":1,"callsign":"N0CALL"}""")
         assertEquals(true, legacy?.autoPowerSaveEnabled)
+        assertEquals(true, legacy?.showTxSuccessToast)
         assertEquals(false, legacy?.webhookEnabled)
         assertEquals("", legacy?.webhookUrl)
         assertEquals("", legacy?.webhookId)

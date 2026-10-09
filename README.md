@@ -28,10 +28,9 @@ Each TX is a short-lived session: connect → `user … pass … vers APRS-TX 1.
 - Settings + operation logs persisted locally; Settings JSON export/import for reinstall
 - Auto power-save: back off GPS poll after repeated timeouts indoors
 - Optional HTTPS webhook: report each manual attempt / scheduled GPS cycle, including positions where APRS TX is blocked
-- Stop zones: configure up to 16 enabled zones with radius and notes; APRS TX is blocked while inside, and the Zone map shows them on a dark OpenStreetMap-based basemap
+- Stop zones: configure up to 16 enabled zones with radius and notes; APRS TX is blocked while inside, and the Map shows them on a dark OpenStreetMap-based basemap
 
-The home screen groups station details, location, and transmission controls. Logs and
-Settings stay in the top bar; Zone map is beside the Location heading when zones exist.
+The home screen groups station details, location, and transmission controls. Home / Map / Settings are primary destinations in the bottom navigation; Logs stays in the home top bar. Map is available even without Stop zones. Switching tabs preserves page state and stops map GPS polling while away.
 Scheduled TX shows its running state, next location check, and progress separately from Stop.
 
 ## Settings
@@ -39,13 +38,19 @@ Scheduled TX shows its running state, next location check, and progress separate
 Settings opens a grouped overview with current status for **Transmission**, **Automation**,
 **Webhook**, **Stop zones**, and **Backup**. Open a category to edit it; valid changes save
 automatically. Group headings and chevrons identify category links; a parent label above
-the page title shows your current level. Use the top-left back arrow or system Back to return
-to the overview, then to the main screen. Entering and leaving a category use opposite slide
+the page title shows your current level. Category pages have a top-left back arrow; system Back returns to the overview, then Home. The overview has no back arrow. Entering and leaving a category use opposite slide
 transitions, and returning preserves the overview scroll position.
 Movement-based TX and webhook reveal their extra fields when enabled. JSON export/import
 is under **Backup**. The repository link and author credit form a compact, centered footer.
 
+Successful APRS Toast messages can be disabled in **Settings → Transmission** (default on).
+Errors and cancellation messages remain visible; the foreground service notification stays active.
+This preference is included in JSON backups; older backups default to on.
+
 ## Webhook
+
+**Copy device hash** copies the exact `device_hash` sent in reports, even with webhook disabled.
+Use it to register the device on your server; it is a device identifier, not a request signature or replay protection. The hash is excluded from backups and logs.
 
 In **Settings → Webhook**, enable the switch to reveal the configuration fields, then
 enter your backend's **Webhook HTTPS URL** and a non-empty **Webhook reporting ID**. Settings are saved automatically and
