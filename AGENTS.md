@@ -14,6 +14,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - 镜像：`xianii/android-dev:latest`（`ANDROID_DEV_IMAGE` 可覆盖），见 `android-dev-docker`。
 - 编译：容器 root + `GRADLE_USER_HOME=/workspace/.gradle-docker`（不挂载宿主 `~/.gradle`）；脚本通过 Gradle Wrapper launcher 启动，兼容 Windows checkout 的 CRLF。
 - Linux adb：`build.sh` 使用 `--user` + USB + `~/.android`，安装前会 `adb kill-server` 释放宿主 adb；Windows adb：`build.ps1` 通过 WSLC 容器使用 `%USERPROFILE%\.android`。
+- 安装使用 adb install -r -t 覆盖更新，保留应用数据及校验 Token；不先 uninstall，签名不匹配直接报错（不得自动卸载回退）。Linux/Windows 脚本一致。
 - 子命令：`build` / `release` / `test` / `install` / `run` / `adb <args>`；无参 = build+install。
 - Release 签名：`./build.sh release` / `.\build.ps1 release` 读 `keystore/release.env`（`APRS_RELEASE_*`）；`/keystore/` 不入库。
 
@@ -33,7 +34,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 | `Aprs.kt` | 包格式（`!lat/lon[CSE/SPD`comment）、校验、Haversine 均速；TX 委托 `AprsIs` |
 | `AprsIs.kt` | 区域 rotate 选择、login、TCP 发包（短连接） |
 | `LocationHelper.kt` | 可取消的单次定位（取消/超时清理监听与 CancellationSignal）；&lt;30s last-known 优先；保留原始 fix 年龄与可选 bearing |
-| `Webhook.kt` | HTTPS JSON POST；ID + SHA-256 设备 hash + ≤60s 有效位置；可选 accuracy/speed/bearing/altitude，无值为 null |
+| `Webhook.kt` | HTTPS JSON POST；Authorization Bearer 随机 Token + ID + SHA-256 前 16 hex 设备 hash + ≤60s 有效位置；可选 accuracy/speed/bearing/altitude，无值为 null |
 | `BeaconService.kt` | 前台 `location` 服务：间隔信标 + 短时 PARTIAL wake |
 | `BeaconRuntime.kt` | 进程内 UI 状态（active/countdown/location/toast） |
 | `AppGraph.kt` | 单例 `SettingsStore` / `LogStore`；init 时挂 WiFi 监听 |
@@ -56,7 +57,7 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 - 任意两次成功发包间隔 ≥30s（手动 Send once 与 scheduled 共用 `lastTxAtMs`）。
 - Settings：min interval 30–3600s（默认 60）；max ≤3600 且 ≥ min（默认 300）；位移阈值默认 100m（100–1000）。位移 TX 默认关：只编 min，max 跟随 min；开启后 GPS 按 min 取点，位移 ≥阈值则按 min 发包，否则到 max 强制发包。
 - 自动省电（默认开）：Beacon 连续 3 次 GPS 超时（不含 &gt;30s last-known 兜底）则下次 GPS 轮询间隔 +30s，上限 300s；成功取点后恢复 min interval。若 min interval ≥300s 则不干预。运行时状态，不持久化。
-- Webhook（默认关）：Settings 设置 HTTPS URL 和非空 reporting ID；手动发送在 APRS 冷却/呼号/Stop zone 判断前、scheduled 每轮定位在 geo/位移判断前各上报一次（scheduled 调用 Transmitter 禁止重复上报）。只接受 0–60s 内且坐标有效的 fix；原始定位年龄以 elapsedRealtime 换算保留。进入 Stop zone 停止前仍报，停止后不额外轮询；单独获取 GPS/地图定位不报。设备 hash 为 packageName|ANDROID_ID|manufacturer|model 的 SHA-256（缺 ID 时用本地持久 UUID），不含于备份；位置缓存保留 altitude/bearing。POST 无重试、无重定向，connect/read 各 5s，2xx 成功，失败仅日志且继续 APRS；使用原生 HttpURLConnection，不增加依赖。定位失败轮次不再重复获取 GPS。
+- Webhook（默认关）：Settings 设置 HTTPS URL 和非空 reporting ID；手动发送在 APRS 冷却/呼号/Stop zone 判断前、scheduled 每轮定位在 geo/位移判断前各上报一次（scheduled 调用 Transmitter 禁止重复上报）。只接受 0–60s 内且坐标有效的 fix；原始定位年龄以 elapsedRealtime 换算保留。进入 Stop zone 停止前仍报，停止后不额外轮询；单独获取 GPS/地图定位不报。设备 hash 为 packageName|ANDROID_ID|manufacturer|model 的 SHA-256 前 16 个 hex（64bit，仅区分设备；缺 ID 时用本地持久 UUID），不含于 JSON 备份；校验 Token 为 SecureRandom 32 字节 hex（256bit），webhook-auth SharedPreferences 同步 commit 持久化，更新/修改 reporting ID/导入备份不变，仅主动刷新或清除数据重建，通过 Authorization: Bearer 发送，不含 JSON/日志/JSON 备份且通过 res/xml 规则排除 Android 云备份与设备迁移；位置缓存保留 altitude/bearing。POST 无重试、无重定向，connect/read 各 5s，2xx 成功，失败仅日志且继续 APRS；使用原生 HttpURLConnection，不增加依赖。定位失败轮次不再重复获取 GPS。
 - Settings 备份：Export/Import JSON（呼号、passcode、comment/status、间隔与位移、自动省电、WiFi、Webhook、Stop zones；不含 lastTx/位置）；SAF `CreateDocument`/`OpenDocument`。
 - 每轮只做一次单次定位；手动 TX 位置未过期（60s）则复用；scheduled GPS 轮次强制刷新（fallback last-known ≤30s）。
 - 禁止连续 `requestLocationUpdates`；禁止 screen wake lock。
@@ -67,11 +68,13 @@ Native port of `aprs-pwa`: amateur-radio APRS position/status TX via **APRS-IS T
 
 ## 自检
 
-- `./build.sh test` / `.\build.ps1 test` → `WebhookTest`（URL/fix 有效性、hash、JSON 可选字段、POST UTF-8/超时/无重定向）及 `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop（含备注/稳定 ID/事件）、TX 轨迹会话清除、min/max/位移 TX 判定、Settings JSON 备份往返、GPS 自动省电退避）。
+- `./build.sh test` / `.\build.ps1 test` → `WebhookTest`（URL/fix 有效性、短 hash、Token 格式/持久化/刷新/保存失败、JSON 可选字段、POST Bearer header/UTF-8/超时/无重定向）及 `AprsTest`（坐标格式、包组装、呼号校验、rotate 选区、login 行、WiFi auto 动作与连续断连武装、geo auto-stop（含备注/稳定 ID/事件）、TX 轨迹会话清除、min/max/位移 TX 判定、Settings JSON 备份往返、GPS 自动省电退避）。
 
 ## 主导航与发送提示（2026-10）
 
 - Home / Map / Settings 为底部主导航（图标+常显标签+选中背景），键盘出现时隐藏；Logs 为 Home 顶栏次级入口，Logs 不显示主导航。Settings 总览无返回箭头，详情返回总览；系统返回最终回 Home。页面通过 SaveableStateHolder 保存分类/滚动；Map 保存视角/跟随/选择，离开即销毁地图并取消 GPS 轮询，仅 Activity resumed 时取点。无 Stop zones 也可进入 Map；用户可见 Map 统一为 Map。
 - Settings → Transmission 的 Show TX success toast 默认开，SharedPreferences `showTxSuccessToast` 并纳入 SettingsBackup JSON，旧备份默认开；Transmitter 成功分支读取开关，手动/定时共用，错误和取消仍提示，FGS 通知不受影响。
-- Settings → Webhook 的 Copy device hash 始终可用，复用 Webhook.deviceHash(Context)，Android 13+ 使用系统剪贴板反馈、旧版 Toast。hash 与请求 device_hash 一致，不写日志/备份；仅设备标识，可供服务端匹配，不是签名或防重放凭证。
+- Settings → Webhook 的 Copy token 始终可用，复用 Webhook.authToken(Context)；Refresh token 确认后刷新并复制，提示服务端更新 Token。剪贴板标敏感，Android 13+ 系统反馈、旧版 Toast，失败仅通用错误提示；Token 不写日志/备份，仅 Bearer header 校验，不防重放，服务端需主动撤销旧 Token。device_hash 从 64 hex 缩为 16 hex，服务端旧记录迁移取前 16 字符。
 - 自检新增成功 Toast 开关开/关备份往返及旧备份默认值；构建/测试仍仅使用 build.sh / build.ps1。
+
+- `res/xml/backup_rules.xml` / `data_extraction_rules.xml`：仅排除 webhook-auth.xml 的云备份与设备迁移，其余备份规则不变；清数据/重装需重新登记 Token，更新应用保留。

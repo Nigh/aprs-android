@@ -103,10 +103,6 @@ install() {
 ensure_adb_key
 wait_for_device
 echo '==> Device ready.'
-if adb shell pm path '$PKG' >/dev/null 2>&1; then
-    echo '==> Removing existing install...'
-    adb uninstall '$PKG'
-fi
 echo '==> Installing...'
 adb install -r -t '$APK'
 echo '==> Launching...'

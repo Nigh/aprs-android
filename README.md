@@ -47,18 +47,30 @@ Successful APRS Toast messages can be disabled in **Settings → Transmission** 
 Errors and cancellation messages remain visible; the foreground service notification stays active.
 This preference is included in JSON backups; older backups default to on.
 
+Install/run scripts update the app in place with `adb install -r -t` and preserve data,
+including the authentication token. A signing-key mismatch fails without uninstalling.
+
 ## Webhook
 
-**Copy device hash** copies the exact `device_hash` sent in reports, even with webhook disabled.
-Use it to register the device on your server; it is a device identifier, not a request signature or replay protection. The hash is excluded from backups and logs.
+**Copy token** copies a locally generated 256-bit random authentication token, even with
+webhook disabled. Register it on your server and verify the exact header
+`Authorization: Bearer <token>` on every report. It is sent only in this header, never
+in the JSON body or logs. Clipboard previews are marked sensitive.
+
+**Refresh token** asks for confirmation, saves a new token and copies it. Update the
+server's accepted token before the next report, and revoke the old token on the server.
+Refreshing does not itself contact the server. App updates, reporting-ID changes and
+settings imports keep the token unchanged. It is excluded from JSON backups, Android
+cloud backup and device transfer. Clearing app data or reinstalling requires registering
+a new token. Token holders can submit requests; this scheme does not prevent replay.
 
 In **Settings → Webhook**, enable the switch to reveal the configuration fields, then
 enter your backend's **Webhook HTTPS URL** and a non-empty **Webhook reporting ID**. Settings are saved automatically and
 included in JSON export/import; older backups default to webhook disabled. The reporting
 ID is your own user identifier, independent of the APRS callsign. Both fields are trimmed
 before use. The URL must use HTTPS with a valid certificate, without URL userinfo or a
-fragment. A query token can be used if your backend requires authentication; exported
-settings also contain this URL, so keep those backups private.
+fragment. Configure header-token validation on the backend instead of putting credentials
+in the URL. Exported settings contain the URL, so keep those backups private.
 
 Each **Send once** attempt and each scheduled GPS cycle sends one JSON POST when a
 reliable location is available, **before** APRS cooldown, callsign validation, Stop zone,
@@ -79,7 +91,7 @@ Example request (`Content-Type: application/json; charset=utf-8`):
 ```json
 {
   "id": "BA7NTM",
-  "device_hash": "7e58cfa934b1d62e0a47f8039c6bd125a0d93f4e62b87c15d940eab7316c208f",
+  "device_hash": "7e58cfa934b1d62e",
   "timestamp_ms": 1790726400000,
   "latitude": 22.5431,
   "longitude": 114.0579,
@@ -93,7 +105,7 @@ Example request (`Content-Type: application/json; charset=utf-8`):
 | Field | Type | Meaning |
 |-------|------|---------|
 | `id` | string | Required user-configured reporting ID |
-| `device_hash` | string | Required lowercase SHA-256 hex digest (64 characters) |
+| `device_hash` | string | Required first 16 lowercase hex characters of SHA-256 (64-bit device identifier) |
 | `timestamp_ms` | integer | Fix time, Unix epoch milliseconds (not POST time) |
 | `latitude` | number | Required WGS84 latitude, −90 to +90 degrees |
 | `longitude` | number | Required WGS84 longitude, −180 to +180 degrees |
@@ -102,13 +114,15 @@ Example request (`Content-Type: application/json; charset=utf-8`):
 | `bearing_deg` | number or null | Direction of travel clockwise from true north, [0, 360) degrees |
 | `altitude_m` | number or null | [Altitude above the WGS84 ellipsoid](https://developer.android.com/reference/android/location/Location#getAltitude()) in meters; may be negative |
 
-The hash is SHA-256 of `packageName|ANDROID_ID|manufacturer|model` encoded as UTF-8.
+The hash is the first 16 hexadecimal characters of SHA-256 of `packageName|ANDROID_ID|manufacturer|model` encoded as UTF-8.
 Raw device identifiers are not sent. Android scopes [`ANDROID_ID`](https://developer.android.com/reference/android/provider/Settings.Secure#ANDROID_ID) to device, Android user,
 and app signing key; a factory reset or signing-key change can change it. If Android
 provides no ID, a locally persisted random UUID replaces it. Device identity is not part
 of the app's settings JSON, so importing the same settings onto another device does not
 copy its hash. Use `(id, device_hash)` to distinguish a user's devices; the hash is an
-identifier, **not authentication**.
+identifier, **not authentication**. Servers upgrading from the old 64-character field
+should migrate existing device records to the first 16 characters and accept the new
+length; token authentication is independent of `(id, device_hash)`.
 
 The backend should accept JSON POST and promptly return any **2xx** status (for example,
 `204 No Content`). Response bodies are ignored. Redirects are not followed. Each report
